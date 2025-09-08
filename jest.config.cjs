@@ -22,6 +22,7 @@ module.exports = {
       testMatch: ["<rootDir>/packages/client/**/*.test.tsx"],
       transformIgnorePatterns: ["node_modules/(?!colyseus\\.js|@colyseus)/"],
       moduleNameMapper: {
+        "^@/components/ui/(.*)$": "<rootDir>/packages/client/components/ui/$1",
         "^@/components/(.*)$": "<rootDir>/packages/client/app/components/$1",
         "^@/lib/(.*)$": "<rootDir>/packages/client/lib/$1",
         "^@/(.*)$": "<rootDir>/packages/$1",

@@ -26,11 +26,20 @@
     "strictNullChecks": true,
     "baseUrl": ".",
     "paths": {
+      "@/*": [
+        "*"
+      ],
       "@/components/*": [
         "app/components/*"
       ],
+      "@/components/ui/*": [
+        "components/ui/*"
+      ],
       "@/lib/*": [
         "lib/*"
+      ],
+      "@/shared/*": [
+        "../shared/*"
       ]
     }
   },

@@ -1,4 +1,3 @@
-/** @type {import('@babel/core').ConfigFile} */
 module.exports = {
   presets: [
     ['@babel/preset-env', { targets: { node: 'current' } }],

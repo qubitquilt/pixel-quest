@@ -15,7 +15,13 @@ describe("MazeRaceRoom", () => {
     const room = new MazeRaceRoom();
     room.onCreate({});
     const options = { name: "HostPlayer" };
-    const mockClient = { sessionId: "mock-session" } as Client;
+    const mockClient = ({
+      sessionId: "mock-session",
+      auth: {},
+      send: jest.fn(),
+      onMessage: jest.fn(),
+      id: "mock-client-id",
+    } as unknown) as Client;
     room.onJoin(mockClient, options);
     expect(room.state.players.size).toBe(1);
     const player = room.state.players.get("mock-session")!;

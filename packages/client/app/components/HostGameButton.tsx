@@ -1,14 +1,13 @@
 'use client';
 
 import { useRouter } from "next/navigation";
-import { Client } from "colyseus";
+import { client } from "@/lib/colyseus";
 
 export function HostGameButton() {
   const router = useRouter();
 
   const handleHostGame = async () => {
     try {
-      const client: Client = new Client;
       const room = await client.create("maze_race");
       router.push(`/lobby/${room.id}`);
     } catch (e) {

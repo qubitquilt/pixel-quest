@@ -9,7 +9,7 @@ export class Player extends Schema {
   @type("number") x: number = 0;
   @type("number") y: number = 0;
   @type("boolean") isWinner: boolean = false;
-   @type("string") currentPowerUp: PowerUpType = "SpeedBoost";
+  @type("string") currentPowerUp: PowerUpType = "SpeedBoost";
   @type("number") roundScore: number = 0;
   @type("number") matchScore: number = 0;
 }
@@ -24,7 +24,7 @@ export class PowerUp extends Schema {
 export class GameState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: PowerUp }) powerUps = new MapSchema<PowerUp>();
-  // @type([["number"]]) maze: number[][] = [];
+  @type([["number"]]) maze: number[][] = [];
   @type("number") treasureValue: number = 100;
   @type("string") roundState: 'waiting' | 'playing' | 'summary' = 'waiting';
   @type("number") round: number = 1;

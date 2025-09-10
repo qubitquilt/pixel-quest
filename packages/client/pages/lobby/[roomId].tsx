@@ -82,7 +82,7 @@ const LobbyPage = () => {
       setShareableUrl(`${window.location.origin}/lobby/${roomId}`);
       
       // Auto-join for host
-      const isHost = router.query.host === 'true';
+      const isHost = String(router.query.host) === 'true';
       if (isHost && (window as any).room && (window as any).room.roomId === roomId) {
         const hostRoom = (window as any).room as Room<GameState>;
         setRoom(hostRoom);
@@ -93,6 +93,10 @@ const LobbyPage = () => {
           setGameState(state);
         });
         console.log('Auto-joined as host using global room');
+        // Set initial gameState from host room
+        if (hostRoom.state) {
+          setGameState(hostRoom.state);
+        }
       }
     }
 

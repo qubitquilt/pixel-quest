@@ -4,6 +4,7 @@ test('displays shareable URL and copy functionality', async ({ page }) => {
   // First, create a room by hosting as host
   await page.goto('/');
   await page.getByRole('button', { name: 'Host Game' }).click();
+  await page.waitForTimeout(2000); // Wait for async room creation and navigation
   await page.waitForURL(/\/lobby\/.*/);
 
   // Verify shareable URL is displayed correctly
@@ -33,6 +34,7 @@ test('joins lobby with custom name and displays in player list', async ({ browse
   const hostPage = await hostContext.newPage();
   await hostPage.goto('/');
   await hostPage.getByRole('button', { name: 'Host Game' }).click();
+  await hostPage.waitForTimeout(2000); // Wait for async room creation and navigation
   await hostPage.waitForURL(/\/lobby\/.*/);
   const roomId = hostPage.url().split('/').pop();
 
@@ -62,6 +64,7 @@ test('player name is removed from list on leave', async ({ browser, page }) => {
   const hostPage = await hostContext.newPage();
   await hostPage.goto('/');
   await hostPage.getByRole('button', { name: 'Host Game' }).click();
+  await hostPage.waitForTimeout(2000); // Wait for async room creation and navigation
   await hostPage.waitForURL(/\/lobby\/.*/);
   const roomId = hostPage.url().split('/').pop();
   await expect(hostPage.locator('ul li')).toHaveText('Player'); // Host joined
@@ -86,7 +89,7 @@ test('player name is removed from list on leave', async ({ browser, page }) => {
 
   // Guest1 leaves (close page)
   await guest1Context.close();
-  await page.waitForTimeout(1000); // Wait for WebSocket update
+  await page.waitForTimeout(2000); // Wait for WebSocket update and UI re-render
 
   // Verify Alice removed from lists
   await expect(hostPage.locator('ul')).not.toContainText('Alice');
@@ -104,6 +107,7 @@ test('host creates room and auto-joins successfully', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Host Game' })).toBeVisible();
   await page.getByRole('button', { name: 'Host Game' }).click();
+  await page.waitForTimeout(2000); // Wait for async room creation and navigation
   await page.waitForURL(/\/lobby\/.*/);
 
   // Verify navigation to lobby with roomId
@@ -122,6 +126,11 @@ test('host creates room and auto-joins successfully', async ({ page }) => {
 
 // Mock clipboard for tests
 test.beforeEach(async ({ page }) => {
+  // Capture console logs
+  page.on('console', msg => {
+    console.log(`${msg.type()}:`, msg.text());
+  });
+
   await page.addInitScript(() => {
     const originalReadText = navigator.clipboard.readText;
     const originalWriteText = navigator.clipboard.writeText;
@@ -132,8 +141,8 @@ test.beforeEach(async ({ page }) => {
     });
     
     Object.defineProperty(navigator.clipboard, 'writeText', {
-      value: () => {
-        clipboardData = 'mocked';
+      value: (text: string) => {
+        clipboardData = text;
         return Promise.resolve();
       },
     });

@@ -1,4 +1,4 @@
-import { HostGameButton } from '@/pixel/components/HostGameButton';
+import { HostGameButton } from '../app/components/HostGameButton';
 
 const HomePage = () => {
   return (

@@ -1,15 +1,19 @@
 module.exports = {
-  transform: {
-    '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
-  },
-  testEnvironment: 'jsdom',
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1',
-    '^@/components/ui/(.*)$': '<rootDir>/components/ui/$1',
-  },
+  testEnvironment: "jsdom",
+  testMatch: ["<rootDir>/test/**/*.test.tsx"],
+  testPathIgnorePatterns: ["/<rootDir>/e2e/"],
   transformIgnorePatterns: [
-    'node_modules/(?!(colyseus\\.js|@colyseus/schema|@colyseus/httpie)/)',
+    "node_modules/(?!@colyseus\/|httpie)"
   ],
-  testPathIgnorePatterns: ['<rootDir>/e2e/'],
+  moduleNameMapper: {
+    "@/lib/(.*)": "<rootDir>/lib/$1",
+    "@/shadcn/ui/(.*)": "<rootDir>/components/ui/$1",
+    "@/pixel/components/(.*)": "<rootDir>/app/components/$1",
+    "@/shared/(.*)": "<rootDir>/../shared/$1",
+    '^(\.{1,2}/.*)\.js$': '$1',
+  },
+  transform: {
+    '^.+\\.(js|jsx|ts|tsx|mjs)$': 'babel-jest',
+  },
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.ts', '@testing-library/jest-dom'],
 };

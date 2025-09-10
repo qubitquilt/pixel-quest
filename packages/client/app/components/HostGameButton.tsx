@@ -9,7 +9,8 @@ export function HostGameButton() {
   const handleHostGame = async () => {
     try {
       const room = await client.create("maze_race");
-      router.push(`/lobby/${room.id}`);
+      (window as any).room = room;
+      router.push(`/lobby/${room.roomId}?host=true`);
     } catch (e) {
       console.error("Failed to create room", e);
       // Here we would show an error toast

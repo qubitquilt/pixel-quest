@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { Room, Client } from "colyseus";
-import { GameState, Player } from "../../shared/types/index";
+import { GameState, Player } from "../../shared/dist/index";
 
 export class MazeRaceRoom extends Room<GameState> {
   onCreate(options: any) {
@@ -22,8 +22,9 @@ export class MazeRaceRoom extends Room<GameState> {
   }
 
   onLeave(client: Client, consented: boolean) {
-    console.log(client.sessionId, "left!");
+    console.log("MazeRaceRoom.onLeave called for client:", client.sessionId, "consented:", consented);
     this.state.players.delete(client.sessionId);
+    console.log("Players after leave:", Array.from(this.state.players.values()).map(p => p.name));
   }
 
   onDispose() {

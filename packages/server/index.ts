@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { Server } from "colyseus";
 import { createServer } from "http";
 import express from "express";
-import { MazeRaceRoom } from "./rooms/MazeRaceRoom.js";
+import { MazeRaceRoom } from "./rooms/MazeRaceRoom";
 
 const port = Number(process.env.PORT || 2567);
 const app = express();

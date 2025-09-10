@@ -1,14 +1,14 @@
 {
-  "presets": [
-    ["@babel/preset-env", {"targets": {"node": "current"}}],
-    "@babel/preset-typescript",
-    ["@babel/preset-react", {"runtime": "automatic"}]
-  ],
+  "presets": ["next/babel"],
   "plugins": [
-    ["@babel/plugin-proposal-decorators", {"version": "legacy"}],
-    ["@babel/plugin-proposal-class-properties", {"loose": false}],
-    ["@babel/plugin-transform-private-methods", {"loose": false}],
+    "@babel/plugin-transform-typescript",
+    ["@babel/plugin-transform-runtime", {
+      "regenerator": true
+    }],
+    "babel-plugin-transform-typescript-metadata",
+    ["@babel/plugin-proposal-decorators", { "legacy": true }],
+    "@babel/plugin-proposal-class-properties",
     "@babel/plugin-transform-class-static-block",
-    "@babel/plugin-syntax-jsx"
+    "@babel/plugin-transform-private-methods"
   ]
 }

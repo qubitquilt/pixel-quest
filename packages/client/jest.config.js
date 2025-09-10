@@ -9,6 +9,8 @@ module.exports = {
     "@/lib/(.*)": "<rootDir>/lib/$1",
     "@/shadcn/ui/(.*)": "<rootDir>/components/ui/$1",
     "@/pixel/components/(.*)": "<rootDir>/app/components/$1",
+    "@/app/(.*)": "<rootDir>/app/$1",
+    "@/components/ui/(.*)": "<rootDir>/components/ui/$1",
     "@/shared/(.*)": "<rootDir>/../shared/$1",
     '^(\.{1,2}/.*)\.js$': '$1',
   },

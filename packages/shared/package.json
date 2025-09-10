@@ -1,6 +1,7 @@
 {
   "name": "shared",
   "version": "1.0.0",
+  "type": "commonjs",
   "main": "dist/index.js",
   "scripts": {
     "build": "babel types --out-dir dist --extensions \".ts\" && tsc --build tsconfig.build.json --emitDeclarationOnly",

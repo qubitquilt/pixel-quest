@@ -1,15 +1,19 @@
 'use client';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { Room } from 'colyseus.js';
 import { GameState } from '@/shared/types';
 import { client } from '@/lib/colyseus';
-import { Input } from '@/shadcn/ui/input';
-import { Button } from '@/shadcn/ui/button';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+
+const PhaserGame = dynamic(() => import('@/app/components/PhaserGame'), { ssr: false });
 
 const LobbyPage = () => {
   const router = useRouter();
-  const { roomId } = router.query;
+  const { roomId, host: hostQuery } = router.query;
+  const isHost = String(hostQuery) === 'true';
   const [room, setRoom] = useState<Room<GameState> | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [playerName, setPlayerName] = useState('');
@@ -64,12 +68,18 @@ const LobbyPage = () => {
       console.log('Successfully joined room:', joinedRoom.roomId);
       const typedRoom = joinedRoom as Room<GameState>;
       setRoom(typedRoom);
-      setGameState(typedRoom.state);
+      setGameState(typedRoom.state.clone());
       (window as any).room = typedRoom;
       typedRoom.onStateChange((state) => {
         console.log('State changed, players:', Array.from(state.players.values()).map(p => p.name));
-        setGameState(state);
+        setGameState(state.clone());
       });
+      
+      typedRoom.onMessage('gameStarted', () => {
+        console.log('Game started, navigating to game page');
+        router.push(`/game/${roomId}`);
+      });
+      
       setJoined(true);
     } catch (err) {
       console.error("Failed to join room", err);
@@ -82,16 +92,21 @@ const LobbyPage = () => {
       setShareableUrl(`${window.location.origin}/lobby/${roomId}`);
       
       // Auto-join for host
-      const isHost = String(router.query.host) === 'true';
       if (isHost && (window as any).room && (window as any).room.roomId === roomId) {
         const hostRoom = (window as any).room as Room<GameState>;
         setRoom(hostRoom);
-        setGameState(hostRoom.state);
+        setGameState(hostRoom.state.clone());
         setJoined(true);
         hostRoom.onStateChange((state) => {
           console.log('State changed, players:', Array.from(state.players.values()).map(p => p.name));
-          setGameState(state);
+          setGameState(state.clone());
         });
+        
+        hostRoom.onMessage('gameStarted', () => {
+          console.log('Game started, navigating to game page');
+          router.push(`/game/${roomId}`);
+        });
+        
         console.log('Auto-joined as host using global room');
         // Set initial gameState from host room
         if (hostRoom.state) {
@@ -102,7 +117,7 @@ const LobbyPage = () => {
 
     return () => {
       console.log('LobbyPage useEffect cleanup: calling room.leave()');
-      room?.leave();
+      if (!isHost) room?.leave();
     };
   }, [roomId, room, router]);
 
@@ -126,6 +141,16 @@ const LobbyPage = () => {
     </div>
   );
   
+  const handleStartGame = async () => {
+    if (!room) return;
+    try {
+      await room.send('startGame');
+      console.log('Start game message sent');
+    } catch (error) {
+      console.error('Failed to send start game message:', error);
+    }
+  };
+  
   const lobbyContent = (
     <div>
       <h1>Lobby: {roomId}</h1>
@@ -133,7 +158,7 @@ const LobbyPage = () => {
         <label htmlFor="shareable-url" className="block text-sm font-medium mb-2">Shareable URL:</label>
         <div className="flex gap-2">
           <Input id="shareable-url" data-testid="shareable-url" value={shareableUrl} readOnly className="flex-1" />
-          <Button onClick={handleCopy} disabled={copied}>
+          <Button onClick={handleCopy} disabled={copied} data-testid="copy-button">
             {copied ? 'Copied!' : 'Copy Link'}
           </Button>
         </div>
@@ -142,10 +167,27 @@ const LobbyPage = () => {
         <>
           <h2 className="mt-6">Players:</h2>
           <ul>
-            {Array.from(gameState.players.values()).map(player => (
+            {gameState?.players ? Array.from(gameState.players.values()).map(player => (
               <li key={player.id}>{player.name}</li>
-            ))}
+            )) : <li>No players</li>}
           </ul>
+          {isHost && (
+            <div className="mt-4">
+              <Button
+                onClick={handleStartGame}
+                disabled={(gameState.players?.size ?? 0) < 2}
+                data-testid="start-game-button"
+                className="w-full"
+              >
+                Start Game
+              </Button>
+            </div>
+          )}
+          {gameState.roundState === 'playing' && (
+            <div className="mt-4">
+              <PhaserGame gameState={gameState} />
+            </div>
+          )}
         </>
       ) : (
         <div>Loading players...</div>

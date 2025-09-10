@@ -1,9 +1,12 @@
 {
   "name": "server",
   "version": "1.0.0",
+  "type": "commonjs",
   "scripts": {
+    "predev": "npm run build --workspace=shared",
+    "build": "babel . --out-dir dist --extensions '.ts' && tsc --build",
     "test": "jest",
-    "dev": "ts-node --project ../../tsconfig.json -r tsconfig-paths/register index.ts"
+    "dev": "ts-node index.ts"
   },
   "devDependencies": {
     "@types/express": "^5.0.3"

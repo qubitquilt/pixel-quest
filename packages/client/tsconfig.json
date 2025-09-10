@@ -29,8 +29,9 @@
     "strictNullChecks": true,
     "baseUrl": ".",
     "paths": {
-      "@/pixel/components/*": ["./app/components/*"],
-      "@/shadcn/ui/*": ["./components/ui/*"],
+      "@/*": ["./*"],
+      "@/components/*": ["./app/components/*"],
+      "@/components/ui/*": ["./components/ui/*"],
       "@/lib/*": ["./lib/*"],
       "@/shared/*": ["../shared/*"]
     }

@@ -2,7 +2,6 @@
   "name": "pixel-quest",
   "version": "1.0.0",
   "description": "Multiplayer Maze Racer Game",
-  "type": "module",
   "workspaces": [
     "packages/*"
   ],
@@ -12,7 +11,7 @@
     "start": "npm run start --workspace=client",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "test": "npm run build --workspace=shared && npm run test --workspace=client && npm run test --workspace=server",
+    "test": "npm run build --workspace=shared && npm run build --workspace=server && npm run test --workspace=client && npm run test --workspace=server",
     "test:e2e": "npm run e2e --workspace=client"
   },
   "dependencies": {
@@ -35,6 +34,8 @@
   },
   "devDependencies": {
     "@babel/cli": "^7.24.7",
+    "@babel/core": "^7.24.7",
+    "@babel/node": "^7.24.7",
     "@babel/plugin-proposal-class-properties": "^7.18.6",
     "@babel/plugin-proposal-decorators": "^7.24.7",
     "@babel/plugin-syntax-jsx": "^7.24.7",

@@ -247,12 +247,26 @@ test('player name is removed from list on leave', async ({ browser, page }) => {
 
 // Mock clipboard for tests
 test.beforeEach(async ({ page }) => {
-  // Capture console logs
-  page.on('console', msg => {
-    console.log(`${msg.type()}:`, msg.text());
-  });
-
+  // Suppress act() warnings and specific console.logs in E2E
   await page.addInitScript(() => {
+    const originalError = console.error;
+    console.error = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('act(...)')) {
+        return; // Suppress act warnings
+      }
+      originalError.apply(console, args);
+    };
+
+    const originalLog = console.log;
+    console.log = (...args) => {
+      // Suppress specific state change logs if needed, but allow others
+      if (args[0] && typeof args[0] === 'string' && args[0].includes('State changed, players:')) {
+        return;
+      }
+      originalLog.apply(console, args);
+    };
+
+    // Clipboard mock
     const originalReadText = navigator.clipboard.readText;
     const originalWriteText = navigator.clipboard.writeText;
     let clipboardData = '';
@@ -267,6 +281,13 @@ test.beforeEach(async ({ page }) => {
         return Promise.resolve();
       },
     });
+  });
+
+  // Capture and log only non-suppressed console messages
+  page.on('console', msg => {
+    if (msg.type() !== 'error' || !msg.text().includes('act(...)')) {
+      console.log(`${msg.type()}:`, msg.text());
+    }
   });
 });
 

@@ -17,7 +17,7 @@ export default defineConfig({
   timeout: 10000,
   webServer: [
     {
-      command: 'next dev',
+      command: 'PLAYWRIGHT_TEST=true next dev',
       url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
     },

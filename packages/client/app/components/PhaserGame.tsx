@@ -2,8 +2,6 @@
 
 import { useEffect, useRef } from 'react';
 
-import type { GameObjects, Types } from 'phaser';
-
 import * as Phaser from 'phaser';
 
 interface Props {

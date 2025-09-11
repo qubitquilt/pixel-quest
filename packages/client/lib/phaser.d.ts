@@ -1,44 +1,57 @@
 declare module 'phaser' {
   export = Phaser;
-  namespace Phaser {
-    class Scene {
+  export namespace Phaser {
+    export class Scene {
+      constructor(config?: { key: string });
       add: {
-        graphics(): Graphics;
-        rectangle(x: number, y: number, width: number, height: number, color: number): Rectangle;
+        graphics(): GameObjects.Graphics;
+        rectangle(x: number, y: number, width: number, height: number, color: number): GameObjects.Rectangle;
+      };
+      input: {
+        keyboard?: {
+          createCursorKeys(): Types.Input.Keyboard.CursorKeys;
+        };
+      };
+      scale: {
+        width: number;
+        height: number;
       };
       grid: number[][];
-      // Add other properties
     }
-    class Game {
+    export class Game {
       constructor(config: any);
       destroy(destroyRenderer: boolean): void;
       scene: {
-        start(key: string, data: any): void;
+        start(key: string, data?: any): void;
+        getScene(key: string): Scene;
       };
     }
-    interface Types {
-      Core: {
-        GameConfig: any;
-      };
-      Input: {
-        Keyboard: {
-          CursorKeys: {
+    export namespace GameObjects {
+      export class Rectangle {
+        constructor(scene: Scene, x: number, y: number, width: number, height: number, color?: number);
+        setOrigin(originX: number, originY?: number): this;
+        x: number;
+        y: number;
+      }
+      export class Graphics {
+        fillStyle(color: number, alpha: number): this;
+        fillRect(x: number, y: number, width: number, height: number): this;
+        clear(): this;
+        setDepth(depth: number): this;
+      }
+    }
+    export namespace Types {
+      export namespace Input {
+        export namespace Keyboard {
+          export class CursorKeys {
             up: { isDown: boolean };
             down: { isDown: boolean };
             left: { isDown: boolean };
             right: { isDown: boolean };
-          };
-        };
-      };
+          }
+        }
+      }
     }
-    class AUTO {}
-    class Graphics {
-      fillStyle(color: number, alpha: number): Graphics;
-      fillRect(x: number, y: number, width: number, height: number): Graphics;
-    }
-    class Rectangle {
-      setOrigin(originX: number, originY?: number): Rectangle;
-    }
-    // Basic for now
+    export class AUTO {}
   }
 }

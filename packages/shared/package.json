@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "type": "commonjs",
   "main": "dist/index.js",
+  "dependencies": {
+    "@colyseus/schema": "^3.0.60"
+  },
   "scripts": {
-    "build": "babel types --out-dir dist --extensions \".ts\" && tsc --build tsconfig.build.json --emitDeclarationOnly",
-    "clean": "rm -rf dist"
+    "build": "pnpm exec babel types --out-dir dist --extensions \".ts\" && pnpm exec tsc --build tsconfig.build.json --emitDeclarationOnly",
+    "clean": "rimraf dist",
+    "type-check": "tsc --noEmit"
   },
   "types": "dist/index.d.ts",
   "devDependencies": {

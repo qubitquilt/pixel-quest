@@ -54,9 +54,9 @@ To get a local copy up and running, follow these steps.
    cd pixel-quest
    ```
 
-2. Install NPM packages
+2. Install packages with pnpm
    ```bash
-   npm install
+   pnpm install
    ```
 
 3. Set up environment variables (create `.env.local` in packages/client and packages/server if needed)
@@ -66,20 +66,34 @@ To get a local copy up and running, follow these steps.
 4. Run the server
    ```bash
    # In a new terminal, from root
-   cd packages/server
-   npm run dev
+   pnpm --filter server dev
    ```
 
 5. Run the client
    ```bash
    # In another terminal, from root
-   cd packages/client
-   npm run dev
+   pnpm --filter client dev
+   ```
+
+Alternatively, run both in parallel from root:
+   ```bash
+   pnpm --filter server dev
    ```
 
 6. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 The game lobby will be available at `/lobby/[roomId]`, and games at `/game/[roomId]`.
+
+## pnpm Commands
+
+- `pnpm install`: Install dependencies for all packages.
+- `pnpm run dev`: Start client and server in parallel.
+- `pnpm run build`: Build all packages (shared first).
+- `pnpm run test`: Run unit tests across packages.
+- `pnpm run test:e2e`: Run E2E tests (starts server automatically).
+- `pnpm run lint`: Lint all code.
+- `pnpm run type-check`: Type check all packages.
+- `pnpm run clean`: Clean build artifacts and node_modules.
 
 ## Usage
 

@@ -2,20 +2,25 @@
   "name": "server",
   "version": "1.0.0",
   "type": "commonjs",
+  "main": "dist/index.js",
   "scripts": {
-    "predev": "npm run build --workspace=shared",
-    "build": "babel . --out-dir dist --extensions '.ts' && tsc --build",
+    "build": "pnpm exec babel . --out-dir dist --extensions '.ts' && pnpm exec tsc --build",
     "test": "jest",
-    "dev": "ts-node index.ts"
+    "dev": "pnpm exec ts-node index.ts",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3"
+    "@types/express": "^5.0.3",
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.17.9",
+    "@colyseus/testing": "^0.16.3"
   },
   "dependencies": {
     "@colyseus/schema": "^3.0.60",
     "colyseus": "^0.16.4",
     "express": "^5.1.0",
     "reflect-metadata": "^0.2.2",
-    "shared": "*"
+    "shared": "workspace:*"
   }
 }

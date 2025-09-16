@@ -320,10 +320,14 @@ test('displays maze rendering after game starts', async ({ browser, page }) => {
   // Wait for game start and maze rendering
   await hostPage.waitForURL(`/game/${roomId}`);
   await guestPage.waitForURL(`/game/${roomId}`);
-
+  
+  // Wait for gameState to load and Phaser to initialize
+  await hostPage.waitForSelector('[data-testid="phaser-game"]', { timeout: 10000 });
+  await guestPage.waitForSelector('[data-testid="phaser-game"]', { timeout: 10000 });
+  
   // Verify Phaser canvas is visible on host page
   await expect(hostPage.getByLabel('Maze game canvas')).toBeVisible();
-
+  
   // Verify on guest page too
   await expect(guestPage.getByLabel('Maze game canvas')).toBeVisible();
 

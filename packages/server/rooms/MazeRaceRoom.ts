@@ -36,14 +36,13 @@ export class MazeRaceRoom extends Room<GameState> {
     if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log(client.sessionId, "joined!");
     }
-    const player = new Player().assign({
-      id: client.sessionId,
-      name: options.name || "Player",
-      x: 1,
-      y: 0,
-      startX: 1,
-      startY: 0,
-    });
+    const player = new Player();
+    player.id = client.sessionId;
+    player.name = options.name || "Player";
+    player.x = 1;
+    player.y = 0;
+    player.startX = 1;
+    player.startY = 0;
 
     this.state.players.set(client.sessionId, player);
   }
@@ -51,7 +50,7 @@ export class MazeRaceRoom extends Room<GameState> {
   onLeave(client: Client, consented: boolean) {
     if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log("MazeRaceRoom.onLeave called for client:", client.sessionId, "consented:", consented);
-      console.log("Players after leave:", Array.from(this.state.players.values()).map((p: Player) => p.name));
+      console.log("Players after leave:", Array.from(this.state.players.values() as Iterable<Player>).map((p: Player) => p.name));
     }
     this.state.players.delete(client.sessionId);
   }

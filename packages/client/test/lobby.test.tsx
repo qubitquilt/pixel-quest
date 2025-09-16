@@ -1,11 +1,17 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { act } from 'react';
 import '@testing-library/jest-dom';
-import { Server } from "colyseus";
 import userEvent from '@testing-library/user-event';
 import express from "express";
 import { createServer } from "http";
 import { GameState, Player } from '@/shared/types';
+
+jest.mock('../lib/colyseus', () => ({
+  client: {
+    create: jest.fn(),
+    joinById: jest.fn(),
+  },
+}));
 
 jest.mock('next/router', () => ({
   useRouter: jest.fn(),

@@ -12,7 +12,6 @@ interface Props {
 class MazeScene extends Phaser.Scene {
   grid: number[][] = [];
   player: Phaser.GameObjects.Rectangle | null = null;
-  cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   roundState: string = 'waiting';
   playerX = 0;
   playerY = 0;
@@ -23,6 +22,7 @@ class MazeScene extends Phaser.Scene {
   coneAngle: number = 60;
   fog: Phaser.GameObjects.Graphics | null = null;
   light: Phaser.GameObjects.Graphics | null = null;
+  isMoving = false;
 
   constructor() {
     super({ key: 'MazeScene' });
@@ -80,8 +80,74 @@ class MazeScene extends Phaser.Scene {
     // Initial visibility
     this.updateVisibility();
 
-    // Setup keyboard input
-    this.cursors = this.input.keyboard?.createCursorKeys() ?? null;
+    // Setup keyboard input for local movement
+    (this.input.keyboard as any)?.on('keydown', this.handleKeyDown, this);
+  }
+
+  private handleKeyDown(event: KeyboardEvent) {
+    if (this.roundState !== 'playing' || this.isMoving || !this.player) return;
+
+    let newX = this.playerX;
+    let newY = this.playerY;
+    let newDirection = this.direction;
+
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'a':
+      case 'A':
+        newX -= 1;
+        newDirection = 'left';
+        break;
+      case 'ArrowRight':
+      case 'd':
+      case 'D':
+        newX += 1;
+        newDirection = 'right';
+        break;
+      case 'ArrowUp':
+      case 'w':
+      case 'W':
+        newY -= 1;
+        newDirection = 'up';
+        break;
+      case 'ArrowDown':
+      case 's':
+      case 'S':
+        newY += 1;
+        newDirection = 'down';
+        break;
+      default:
+        return;
+    }
+
+    // Check bounds and collision (1 = path)
+    if (
+      newX >= 0 &&
+      newX < this.grid[0].length &&
+      newY >= 0 &&
+      newY < this.grid.length &&
+      this.grid[newY][newX] === 1
+    ) {
+      this.isMoving = true;
+      const targetX = newX * this.tileSize + this.tileSize / 2;
+      const targetY = newY * this.tileSize + this.tileSize / 2;
+
+      // Smooth tween animation
+      (this as any).tweens.add({
+        targets: this.player,
+        x: targetX,
+        y: targetY,
+        duration: this.moveSpeed,
+        ease: 'Linear',
+        onComplete: () => {
+          this.playerX = newX;
+          this.playerY = newY;
+          this.direction = newDirection;
+          this.updateVisibility();
+          this.isMoving = false;
+        }
+      });
+    }
   }
 
   updatePlayerPosition(x: number, y: number) {
@@ -140,45 +206,7 @@ class MazeScene extends Phaser.Scene {
   }
 
   update() {
-    if (this.roundState !== 'playing' || !this.cursors || !this.player) return;
-
-    const handleMovement = () => {
-      if (this.cursors!.left.isDown) {
-        this.direction = 'left';
-        const newX = this.playerX - 1;
-        if (newX >= 0 && this.grid[this.playerY][newX] !== 0) {
-          this.playerX = newX;
-          this.player!.x = this.playerX * this.tileSize + this.tileSize / 2;
-          this.updateVisibility();
-        }
-      } else if (this.cursors!.right.isDown) {
-        this.direction = 'right';
-        const newX = this.playerX + 1;
-        if (newX < this.grid[0].length && this.grid[this.playerY][newX] !== 0) {
-          this.playerX = newX;
-          this.player!.x = this.playerX * this.tileSize + this.tileSize / 2;
-          this.updateVisibility();
-        }
-      } else if (this.cursors!.up.isDown) {
-        this.direction = 'up';
-        const newY = this.playerY - 1;
-        if (newY >= 0 && this.grid[newY][this.playerX] !== 0) {
-          this.playerY = newY;
-          this.player!.y = this.playerY * this.tileSize + this.tileSize / 2;
-          this.updateVisibility();
-        }
-      } else if (this.cursors!.down.isDown) {
-        this.direction = 'down';
-        const newY = this.playerY + 1;
-        if (newY < this.grid.length && this.grid[newY][this.playerX] !== 0) {
-          this.playerY = newY;
-          this.player!.y = this.playerY * this.tileSize + this.tileSize / 2;
-          this.updateVisibility();
-        }
-      }
-    };
-
-    handleMovement();
+    // No continuous update needed for discrete movement
   }
 }
 
@@ -242,35 +270,8 @@ const PhaserGame = ({ gameState, room }: Props) => {
   }, [room, gameState.sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!room) return;
-    let dx = 0, dy = 0;
-    switch (e.key) {
-      case 'ArrowLeft':
-      case 'a':
-      case 'A':
-        dx = -1;
-        break;
-      case 'ArrowRight':
-      case 'd':
-      case 'D':
-        dx = 1;
-        break;
-      case 'ArrowUp':
-      case 'w':
-      case 'W':
-        dy = -1;
-        break;
-      case 'ArrowDown':
-      case 's':
-      case 'S':
-        dy = 1;
-        break;
-      default:
-        return;
-    }
-    // Send movement delta to server
-    room.send('move', { dx, dy });
-    console.log('Key pressed:', e.key);
+    // Defer server sync to 3.2; local movement handled in Phaser scene
+    // For accessibility fallback, but primary input is Phaser keyboard
   };
 
   return (
@@ -278,9 +279,10 @@ const PhaserGame = ({ gameState, room }: Props) => {
       ref={gameRef}
       data-testid="phaser-game"
       tabIndex={0}
-      aria-label="Maze game canvas"
-      className="w-full h-[672px]"
+      aria-label="Maze game canvas - use arrow keys or WASD to move"
+      className="w-full h-[672px] outline-none focus:outline-none"
       onKeyDown={handleKeyDown}
+      role="application"
     />
   );
 };

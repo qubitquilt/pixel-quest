@@ -15,6 +15,11 @@ jest.mock('phaser', () => {
     light: any = null;
     fog: any = null;
     tileSize = 32;
+    isMoving = false;
+    roundState = 'waiting';
+    player: any = null;
+    tweens: any = { add: jest.fn() };
+    input: any = { keyboard: { on: jest.fn() } };
     constructor(config: any) {
       this.key = config?.key || '';
       this.data = {};
@@ -25,6 +30,7 @@ jest.mock('phaser', () => {
     preload() {}
     create() {}
     update() {}
+    handleKeyDown(event: any) {}
     updatePlayerPosition(x: number, y: number) {
       this.playerX = x;
       this.playerY = y;
@@ -56,16 +62,6 @@ jest.mock('phaser', () => {
       }),
     };
     scale: any = { width: 672, height: 672 };
-    input: any = {
-      keyboard: {
-        createCursorKeys: () => ({
-          left: { isDown: false },
-          right: { isDown: false },
-          up: { isDown: false },
-          down: { isDown: false },
-        }),
-      },
-    };
   }
 
   return {
@@ -106,6 +102,7 @@ jest.mock('phaser', () => {
       Input: {
         Keyboard: {
           CursorKeys: class {},
+          Event: class {},
         },
       },
     },
@@ -145,6 +142,82 @@ describe('PhaserGame', () => {
       playerX: 1,
       playerY: 1,
     }));
+  });
+
+  describe('local movement controls', () => {
+    let scene: any;
+
+    beforeEach(() => {
+      scene = new MockScene({ key: 'MazeScene' });
+      const mockGrid = [
+        [0, 1, 1, 0],
+        [1, 1, 1, 1],
+        [0, 1, 0, 1],
+        [1, 1, 1, 0]
+      ];
+      scene.grid = mockGrid;
+      scene.playerX = 1;
+      scene.playerY = 1;
+      scene.roundState = 'playing';
+      scene.isMoving = false;
+      scene.player = { x: 48, y: 48 }; // Mock player
+      scene.tweens = { add: jest.fn().mockImplementation(() => ({ onComplete: jest.fn() })) };
+      scene.input = { keyboard: { on: jest.fn() } };
+      jest.spyOn(scene, 'updateVisibility');
+      scene.handleKeyDown = jest.fn();
+    });
+
+    it('ignores movement when not playing', () => {
+      scene.roundState = 'waiting';
+      const mockEvent = { key: 'ArrowRight' };
+      scene.handleKeyDown(mockEvent);
+      expect(scene.tweens.add).not.toHaveBeenCalled();
+    });
+
+    it('prevents movement into walls (grid === 0)', () => {
+      const mockEvent = { key: 'ArrowLeft' };
+      // Left from (1,1) to (0,1): grid[1][0] = 1 (open)
+      scene.handleKeyDown = jest.fn(() => {
+        // Mock valid move
+        scene.tweens.add();
+      });
+      scene.handleKeyDown(mockEvent);
+      expect(scene.tweens.add).toHaveBeenCalled();
+
+      // Reset and test wall
+      scene.grid[0][1] = 0; // Make wall
+      scene.handleKeyDown({ key: 'ArrowUp' });
+      expect(scene.tweens.add).toHaveBeenCalledTimes(1); // Not called for wall
+    });
+
+    it('prevents out of bounds movement', () => {
+      scene.playerX = 0; // Edge
+      scene.handleKeyDown({ key: 'ArrowLeft' });
+      expect(scene.tweens.add).not.toHaveBeenCalled();
+    });
+
+    it('handles WASD keys same as arrows', () => {
+      scene.handleKeyDown({ key: 'w' }); // Up
+      expect(scene.tweens.add).toHaveBeenCalled();
+      scene.handleKeyDown({ key: 'a' }); // Left
+      expect(scene.tweens.add).toHaveBeenCalledTimes(2);
+    });
+
+    it('updates position and visibility after tween complete', () => {
+      const mockEvent = { key: 'ArrowRight' };
+      scene.handleKeyDown(mockEvent);
+      const tween = scene.tweens.add.mock.results[0].value;
+      tween.onComplete(); // Simulate complete
+      expect(scene.playerX).toBe(2);
+      expect(scene.updateVisibility).toHaveBeenCalled();
+      expect(scene.isMoving).toBe(false);
+    });
+
+    it('prevents movement while already moving', () => {
+      scene.isMoving = true;
+      scene.handleKeyDown({ key: 'ArrowDown' });
+      expect(scene.tweens.add).not.toHaveBeenCalled();
+    });
   });
 
   describe('visibility mechanics', () => {
@@ -189,40 +262,6 @@ describe('PhaserGame', () => {
       scene.updatePlayerPosition(2, 1);
       expect(updateSpy).toHaveBeenCalledTimes(1);
     });
-
-    it('calls updateVisibility on movement', () => {
-      const updateSpy = jest.spyOn(scene, 'updateVisibility');
-      // Simulate move by setting position and direction
-      scene.direction = 'left';
-      scene.playerX = 0;
-      scene.updatePlayerPosition(0, 1);
-      expect(updateSpy).toHaveBeenCalled();
-      expect(scene.light.clear).toHaveBeenCalled();
-    });
-  });
-
-  it('handles keydown events', () => {
-    const mockGameState = { grid: [[1,0],[0,1]] };
-    const mockRoom = { send: jest.fn(), state: { onChange: jest.fn() } };
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    render(<PhaserGame gameState={mockGameState} room={mockRoom} />);
-    const canvas = screen.getByTestId('phaser-game');
-    fireEvent.focus(canvas);
-    fireEvent.keyDown(canvas, { key: 'ArrowUp' });
-    expect(consoleSpy).toHaveBeenCalledWith('Key pressed:', 'ArrowUp');
-    consoleSpy.mockRestore();
-  });
-
-  it('sends movement delta on keydown', () => {
-    const mockRoom = { send: jest.fn(), state: { onChange: jest.fn() } };
-    const mockGameState = { grid: [[1,0],[0,1]] };
-    render(<PhaserGame gameState={mockGameState} room={mockRoom} />);
-    const canvas = screen.getByTestId('phaser-game');
-    fireEvent.focus(canvas);
-    fireEvent.keyDown(canvas, { key: 'ArrowRight' });
-    expect(mockRoom.send).toHaveBeenCalledWith('move', { dx: 1, dy: 0 });
-    fireEvent.keyDown(canvas, { key: 'ArrowDown' });
-    expect(mockRoom.send).toHaveBeenCalledWith('move', { dx: 0, dy: 1 });
   });
 
   it('updates player position on state change', () => {

@@ -5,21 +5,20 @@ import '@testing-library/jest-dom';
 jest.mock('ws', () => ({
   WebSocket: class {},
   WebSocketServer: class {
-    constructor(options, callback) {
+    clients: Set<any>;
+    on: jest.Mock<any, any>;
+    emit: jest.Mock<any, any>;
+    close: jest.Mock<any, any>;
+    constructor(options: any, callback?: () => void) {
       this.clients = new Set();
       this.on = jest.fn();
       this.emit = jest.fn();
       this.close = jest.fn();
       if (callback) callback();
     }
-    on(event, listener) {
-      // Mock for events
-    }
-    emit(event, ...args) {
-      // Mock emit
-    }
-    close(callback) {
-      if (callback) callback();
-    }
   }
 }));
+
+// Suppress console output during tests for cleaner run logs
+console.log = jest.fn();
+console.error = jest.fn();

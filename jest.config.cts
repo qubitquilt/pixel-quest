@@ -3,8 +3,10 @@ module.exports = {
   projects: [
     {
       displayName: "server",
-      testEnvironment: "node",
+      preset: "ts-jest",
+      testEnvironment: "jsdom",
       testMatch: ["<rootDir>/packages/server/test/**/*.test.ts"],
+      testPathIgnorePatterns: ["/dist/**"],
       transformIgnorePatterns: ["node_modules/(?!(@colyseus/testing|@colyseus/schema)/)"],
       setupFiles: ["<rootDir>/packages/server/jest.setup.ts"],
       transform: {

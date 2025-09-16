@@ -1,12 +1,14 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "composite": true,
     "noEmit": false,
     "module": "commonjs",
     "target": "es5",
     "outDir": "./dist",
     "rootDir": "./types",
     "declaration": true,
+    "declarationMap": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "esModuleInterop": true,

@@ -8,6 +8,7 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node",
     "jsx": "preserve",
+    "useDefineForClassFields": false,
     "paths": {
       "@/shadcn/ui/*": ["./packages/client/components/ui/*"],
       "@/pixel/components/*": ["./packages/client/app/components/*"],

@@ -36,7 +36,7 @@ const GamePage = () => {
     return () => {
       room?.leave();
     };
-  }, [roomId]);
+  }, [roomId, room]);
 
   if (!gameState) {
     return <div>Loading game...</div>;

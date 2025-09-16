@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { Schema, type, MapSchema } from "@colyseus/schema";
+import { Schema, type, MapSchema, ArraySchema } from "@colyseus/schema";
 
 // Type definitions for TypeScript
 export interface IMaze {
@@ -22,7 +22,7 @@ export interface IGameState {
   players: Map<string, IPlayer>;
   mazeWidth: number;
   mazeHeight: number;
-  grid: number[][];
+  grid: number[];
 }
 
 export interface Maze {
@@ -65,7 +65,7 @@ export class GameState extends Schema {
   mazeHeight: number = 0;
 
   @type(["number"])
-  grid: number[][] = [];
+  grid = new ArraySchema<number>();
 
   root: GameState;
 

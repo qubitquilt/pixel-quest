@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { Room, Client } from "colyseus";
+import { ArraySchema } from "@colyseus/schema";
 import { GameState, Player, Maze } from "shared";
 
 export class MazeRaceRoom extends Room<GameState> {
@@ -21,8 +22,8 @@ export class MazeRaceRoom extends Room<GameState> {
         const newY = player.y + dy;
         // Validate bounds
         if (newX >= 0 && newX < this.state.mazeWidth && newY >= 0 && newY < this.state.mazeHeight) {
-          // Validate against grid (1 = path)
-          if (this.state.grid[newY][newX] === 1) {
+          // Validate against grid (1 = path) - flat indexing
+          if (this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
             player.x = newX;
             player.y = newY;
           }
@@ -81,7 +82,7 @@ export class MazeRaceRoom extends Room<GameState> {
       const maze = this.generateMaze();
       this.state.mazeWidth = maze.width;
       this.state.mazeHeight = maze.height;
-      this.state.grid = maze.grid.map((row: number[]) => [...row]); // Deep copy for Colyseus
+      this.state.grid = new ArraySchema(...maze.grid.flat());
       
       // Set player start positions (all players start at entrance)
       this.state.players.forEach((player: Player) => {
@@ -110,8 +111,8 @@ export class MazeRaceRoom extends Room<GameState> {
       const newY = player.y + dy;
       // Validate bounds
       if (newX >= 0 && newX < this.state.mazeWidth && newY >= 0 && newY < this.state.mazeHeight) {
-        // Validate against grid (1 = path)
-        if (this.state.grid[newY][newX] === 1) {
+        // Validate against grid (1 = path) - flat indexing
+        if (this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
           player.x = newX;
           player.y = newY;
         }

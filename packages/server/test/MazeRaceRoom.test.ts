@@ -1,6 +1,7 @@
 import "reflect-metadata";
 
 import { Client } from "colyseus";
+import { ArraySchema } from "@colyseus/schema";
 import { MazeRaceRoom } from "../rooms/MazeRaceRoom";
 import { GameState, Player } from "shared";
 
@@ -305,8 +306,7 @@ describe("MazeRaceRoom", () => {
         // Verify maze properties are set
         expect(room.state.mazeWidth).toBe(21);
         expect(room.state.mazeHeight).toBe(21);
-        expect(room.state.grid).toHaveLength(21);
-        expect(room.state.grid[0]).toHaveLength(21);
+        expect(room.state.grid).toHaveLength(441);
 
         // Verify players have start positions set
         room.state.players.forEach((player) => {
@@ -359,7 +359,7 @@ describe("MazeRaceRoom", () => {
       const initialY = state.players.get('guest-session')!.y;
 
       // Valid move: right to open path (ensure grid[0][2] is path for test)
-      room.state.grid[0][2] = 1; // Mock open path for deterministic test
+      room.state.grid[0 * 21 + 2] = 1; // Mock open path for deterministic test
       room.onMove(guestClient, { dx: 1, dy: 0 });
 
       // Assert updated position
@@ -376,7 +376,7 @@ describe("MazeRaceRoom", () => {
 
       // Invalid move: into wall (assume grid[initialY][initialX + 1] = 0)
       // Mock grid for test (since random, but validation uses grid)
-      state.grid[initialY][initialX + 1] = 0; // Set wall
+      state.grid[initialY * 21 + (initialX + 1)] = 0; // Set wall
 
       room.onMove(guestClient, { dx: 1, dy: 0 });
 
@@ -389,8 +389,8 @@ describe("MazeRaceRoom", () => {
       const state = room.state as any;
 
       // Multiple moves (mock open paths for deterministic test)
-      room.state.grid[1][1] = 1; // Down for guest
-      room.state.grid[0][2] = 1; // Right for host
+      room.state.grid[1 * 21 + 1] = 1; // Down for guest
+      room.state.grid[0 * 21 + 2] = 1; // Right for host
       room.onMove(guestClient, { dx: 0, dy: 1 });
       room.onMove(hostClient, { dx: 1, dy: 0 });
 
@@ -442,14 +442,12 @@ describe("MazeRaceRoom", () => {
         expect(state.roundState).toBe('playing');
         expect(state.mazeWidth).toBe(21);
         expect(state.mazeHeight).toBe(21);
-        expect(Array.isArray(state.grid)).toBe(true);
-        expect(state.grid.length).toBe(21);
-        expect(Array.isArray(state.grid[0])).toBe(true);
-        expect(state.grid[0].length).toBe(21);
+        expect(state.grid).toBeInstanceOf(ArraySchema);
+        expect(state.grid.length).toBe(441);
 
         // Verify entrance and exit are open (1 = path)
-        expect(state.grid[0][1]).toBe(1); // Entrance
-        expect(state.grid[20][19]).toBe(1); // Exit
+        expect(state.grid[0 * 21 + 1]).toBe(1); // Entrance
+        expect(state.grid[20 * 21 + 19]).toBe(1); // Exit
 
         // Verify players have correct start positions
         state.players.forEach((player) => {
@@ -495,14 +493,11 @@ describe("MazeRaceRoom", () => {
         const state = room.state;
 
         // Verify grid was deep copied correctly for Colyseus
-        expect(state.grid.length).toBe(21);
-        for (let i = 0; i < 21; i++) {
-          expect(state.grid[i].length).toBe(21);
-          for (let j = 0; j < 21; j++) {
-            // Allow for minor variations due to random generation, but structure should match
-            expect(typeof state.grid[i][j]).toBe('number');
-            expect(state.grid[i][j] === 0 || state.grid[i][j] === 1).toBe(true); // Only 0 or 1 values
-          }
+        expect(state.grid.length).toBe(441);
+        for (let i = 0; i < 441; i++) {
+          // Allow for minor variations due to random generation, but structure should match
+          expect(typeof state.grid[i]).toBe('number');
+          expect(state.grid[i] === 0 || state.grid[i] === 1).toBe(true); // Only 0 or 1 values
         }
 
         // Verify the grid is not the same reference as the generated maze (deep copy)
@@ -547,8 +542,7 @@ describe("MazeRaceRoom", () => {
           expect(state.roundState).toBe('playing');
           expect(state.mazeWidth).toBe(21);
           expect(state.mazeHeight).toBe(21);
-          expect(state.grid.length).toBe(21);
-          expect(state.grid[0].length).toBe(21);
+          expect(state.grid.length).toBe(441);
         }
       });
 
@@ -583,19 +577,17 @@ describe("MazeRaceRoom", () => {
         // Verify the maze data structure is correct for Colyseus serialization
         expect(typeof state.mazeWidth).toBe('number');
         expect(typeof state.mazeHeight).toBe('number');
-        expect(Array.isArray(state.grid)).toBe(true);
-        expect(state.grid.every((row: any) => Array.isArray(row))).toBe(true);
-        expect(state.grid.every((row: any) => row.every((cell: number) => typeof cell === 'number'))).toBe(true);
-        expect(state.grid.every((row: any) => row.length === 21)).toBe(true);
+        expect(state.grid).toBeInstanceOf(ArraySchema);
+        expect(state.grid.every((cell: number) => typeof cell === 'number')).toBe(true);
+        expect(state.grid.length).toBe(441);
 
         // Verify all cells contain only 0 (wall) or 1 (path) values
-        const allCells = state.grid.flat();
-        expect(allCells.every((cell: number) => cell === 0 || cell === 1)).toBe(true);
+        expect(Array.from(state.grid).every((cell: number) => cell === 0 || cell === 1)).toBe(true);
 
         // Verify the state changes would trigger Colyseus broadcast (by verifying properties are set)
         expect(state.roundState).toBe('playing'); // This change triggers broadcast
         expect(state.mazeWidth).toBe(21); // This change triggers broadcast
         expect(state.mazeHeight).toBe(21); // This change triggers broadcast
-        expect(state.grid.length).toBe(21); // This change triggers broadcast
+        expect(state.grid.length).toBe(441); // This change triggers broadcast
       });
     });

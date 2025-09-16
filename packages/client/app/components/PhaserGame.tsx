@@ -29,7 +29,20 @@ class MazeScene extends Phaser.Scene {
   }
 
   init(data: any) {
-    this.grid = data.grid || [];
+    // Reshape flat grid to 2D if it's a flat array (from Colyseus serialization)
+    let reshapedGrid = data.grid || [];
+    if (Array.isArray(reshapedGrid) && reshapedGrid.length === 441) {
+      const width = 21;
+      this.grid = Array.from({ length: width }, (_, y) =>
+        Array.from({ length: width }, (_, x) => reshapedGrid[y * width + x])
+      );
+    } else {
+      this.grid = reshapedGrid;
+    }
+    this.roundState = data.roundState || 'waiting';
+    this.playerX = data.playerX || 1; // Start at (1,1) assuming open path
+    this.playerY = data.playerY || 1;
+    this.direction = data.direction || 'down';
     this.roundState = data.roundState || 'waiting';
     this.playerX = data.playerX || 1; // Start at (1,1) assuming open path
     this.playerY = data.playerY || 1;

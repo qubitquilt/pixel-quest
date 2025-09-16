@@ -30,7 +30,65 @@ jest.mock('phaser', () => {
     preload() {}
     create() {}
     update() {}
-    handleKeyDown(event: any) {}
+    handleKeyDown(event: any) {
+      if (this.roundState !== 'playing' || this.isMoving || !this.player) return;
+
+      let newX = this.playerX;
+      let newY = this.playerY;
+      let newDirection = this.direction;
+
+      switch (event.key) {
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+          newX -= 1;
+          newDirection = 'left';
+          break;
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+          newX += 1;
+          newDirection = 'right';
+          break;
+        case 'ArrowUp':
+        case 'w':
+        case 'W':
+          newY -= 1;
+          newDirection = 'up';
+          break;
+        case 'ArrowDown':
+        case 's':
+        case 'S':
+          newY += 1;
+          newDirection = 'down';
+          break;
+        default:
+          return;
+      }
+
+      // Check bounds and collision (1 = path)
+      if (
+        newX >= 0 &&
+        newX < this.grid[0].length &&
+        newY >= 0 &&
+        newY < this.grid.length &&
+        this.grid[newY][newX] === 1
+      ) {
+        this.isMoving = true;
+
+        // Mock tween creation (actual tween config not needed for tests)
+        this.tweens.add({
+          targets: this.player,
+          onComplete: () => {
+            this.playerX = newX;
+            this.playerY = newY;
+            this.direction = newDirection;
+            this.updateVisibility();
+            this.isMoving = false;
+          }
+        });
+      }
+    }
     updatePlayerPosition(x: number, y: number) {
       this.playerX = x;
       this.playerY = y;
@@ -161,10 +219,12 @@ describe('PhaserGame', () => {
       scene.roundState = 'playing';
       scene.isMoving = false;
       scene.player = { x: 48, y: 48 }; // Mock player
-      scene.tweens = { add: jest.fn().mockImplementation(() => ({ onComplete: jest.fn() })) };
+      scene.tweens = { add: jest.fn((config) => {
+        const callback = config.onComplete || jest.fn();
+        return { onComplete: () => callback() };
+      }) };
       scene.input = { keyboard: { on: jest.fn() } };
       jest.spyOn(scene, 'updateVisibility');
-      scene.handleKeyDown = jest.fn();
     });
 
     it('ignores movement when not playing', () => {
@@ -177,10 +237,6 @@ describe('PhaserGame', () => {
     it('prevents movement into walls (grid === 0)', () => {
       const mockEvent = { key: 'ArrowLeft' };
       // Left from (1,1) to (0,1): grid[1][0] = 1 (open)
-      scene.handleKeyDown = jest.fn(() => {
-        // Mock valid move
-        scene.tweens.add();
-      });
       scene.handleKeyDown(mockEvent);
       expect(scene.tweens.add).toHaveBeenCalled();
 
@@ -199,7 +255,9 @@ describe('PhaserGame', () => {
     it('handles WASD keys same as arrows', () => {
       scene.handleKeyDown({ key: 'w' }); // Up
       expect(scene.tweens.add).toHaveBeenCalled();
-      scene.handleKeyDown({ key: 'a' }); // Left
+      const firstTween = scene.tweens.add.mock.results[0].value;
+      firstTween.onComplete(); // Simulate completion to allow next move
+      scene.handleKeyDown({ key: 'd' }); // Right (valid from new position)
       expect(scene.tweens.add).toHaveBeenCalledTimes(2);
     });
 

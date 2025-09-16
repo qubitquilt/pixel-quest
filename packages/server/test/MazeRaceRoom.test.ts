@@ -2,7 +2,7 @@ import "reflect-metadata";
 
 import { Client } from "colyseus";
 import { MazeRaceRoom } from "../rooms/MazeRaceRoom";
-import { GameState, Player } from "../../shared/types";
+import { GameState, Player } from "shared";
 
 describe("MazeRaceRoom", () => {
   it("should create a new room", () => {

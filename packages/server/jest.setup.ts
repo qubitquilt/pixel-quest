@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { Player, GameState } from "../shared/types/index";
+import { Player, GameState } from "shared";
 new Player(); // Force schema metadata initialization
 new GameState(); // Force schema metadata initialization
 

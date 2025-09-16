@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter client dev\" \"pnpm --filter server dev\"",
     "build": "pnpm --filter shared build && pnpm --filter server build && pnpm --filter client build",
-    "start": "pnpm --filter client start",
+    "start": "concurrently \"pnpm --filter client start\" \"pnpm --filter server start\"",
     "test": "pnpm --filter shared build && pnpm --filter client --filter server --parallel test",
-    "test:e2e": "concurrently \"pnpm --filter server dev\" \"wait-on http://localhost:2567/health && pnpm --filter client e2e\"",
+    "test:e2e": "pnpm --filter client e2e",
     "lint": "pnpm --recursive exec lint",
     "lint:fix": "pnpm --recursive exec lint:fix",
     "type-check": "pnpm --recursive exec type-check",

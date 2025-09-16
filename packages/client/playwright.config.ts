@@ -15,6 +15,8 @@ export default defineConfig({
     trace: 'off',
   },
   timeout: 10000,
+  globalSetup: require.resolve('./playwright.setup.ts'),
+  globalTeardown: require.resolve('./playwright.teardown.ts'),
   webServer: [
     {
       command: 'PLAYWRIGHT_TEST=true next dev',
@@ -22,16 +24,10 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
   ],
-  // Configure a separate project for setting up the Colyseus server.
+  // The main project for running UI tests.
   projects: [
     {
-      name: 'setup',
-      testMatch: /playwright\.setup\.ts/,
-    },
-    // The main project for running UI tests.
-    {
       name: 'chromium',
-      dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],

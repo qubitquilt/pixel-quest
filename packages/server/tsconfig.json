@@ -1,17 +1,14 @@
 {
   "extends": "../../tsconfig.json",
-  "references": [
-    { "path": "../shared/tsconfig.build.json" }
-  ],
   "compilerOptions": {
-    "noEmit": true,
+    "noEmit": false,
+    "outDir": "dist",
     "module": "commonjs",
     "target": "ES2020",
     "moduleResolution": "Node",
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
       "shared": ["../shared/dist/index"],
@@ -19,5 +16,6 @@
     }
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "test/**"]
+  "exclude": ["node_modules", "dist", "test/**"],
+  "comments": "Added paths for 'shared' package resolution to built dist/index.d.ts to fix monorepo TypeScript module imports."
 }

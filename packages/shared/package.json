@@ -7,7 +7,7 @@
     "@colyseus/schema": "^3.0.60"
   },
   "scripts": {
-    "build": "pnpm exec babel types --out-dir dist --extensions \".ts\" && pnpm exec tsc --build tsconfig.build.json --emitDeclarationOnly",
+    "build": "pnpm exec tsc --build tsconfig.build.json",
     "clean": "rimraf dist",
     "type-check": "tsc --noEmit"
   },

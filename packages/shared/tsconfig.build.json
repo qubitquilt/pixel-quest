@@ -4,9 +4,9 @@
     "composite": true,
     "noEmit": false,
     "module": "commonjs",
-    "target": "es5",
+    "target": "ES2020",
     "outDir": "./dist",
-    "rootDir": "./types",
+    "rootDir": ".",
     "declaration": true,
     "declarationMap": true,
     "experimentalDecorators": true,
@@ -15,6 +15,8 @@
     "allowSyntheticDefaultImports": true
   },
   "include": [
+    "index.ts",
     "types/**/*.ts"
-  ]
+  ],
+  "comments": "Updated to include index.ts as entry point for package re-exports and set rootDir to '.' for proper declaration emission to dist/index.d.ts to resolve monorepo module resolution issues."
 }

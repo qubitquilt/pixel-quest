@@ -4,9 +4,10 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "scripts": {
-    "build": "pnpm exec babel \"index.ts\" \"rooms/**/*.ts\" --out-dir dist --extensions '.ts' && pnpm exec tsc --build",
+    "build": "pnpm --filter shared build && pnpm exec tsc --build",
     "test": "jest",
     "dev": "pnpm exec ts-node index.ts",
+    "start": "pnpm exec node dist/index.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts"
   },

@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { Room, Client } from "colyseus";
-import { GameState, Player, Maze } from "shared/types";
+import { GameState, Player, Maze } from "shared";
 
 export class MazeRaceRoom extends Room<GameState> {
   onCreate(options: any) {

@@ -105,6 +105,14 @@ describe('GamePage', () => {
   });
 
   it('renders loading initially and joins room once on mount', async () => {
+    let storedCallback: (state: any) => void;
+    const mockStatePlaying = { ...mockState, roundState: 'playing', clone: jest.fn(() => ({ ...mockState, roundState: 'playing' })) };
+    mockRoom.onStateChange = jest.fn((cb) => {
+      storedCallback = cb;
+      cb(mockState.clone()); // Initial call with waiting
+    });
+    mockClient.joinById.mockResolvedValue(mockRoom);
+
     render(<GamePage />);
 
     expect(screen.getByText('Loading game...')).toBeInTheDocument();
@@ -114,7 +122,16 @@ describe('GamePage', () => {
       expect(mockClient.joinById).toHaveBeenCalledWith('test-room-id');
     });
 
-    await screen.findByTestId('phaser-game');
+    // Simulate state change to playing after join
+    act(() => {
+      storedCallback(mockStatePlaying);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading game...')).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument();
     expect(screen.getByText('Game: test-room-id')).toBeInTheDocument();
   });
 
@@ -129,13 +146,21 @@ describe('GamePage', () => {
       expect(mockClient.joinById).toHaveBeenCalledTimes(1);
       expect(consoleSpy).toHaveBeenCalledWith('Failed to join game room', error);
       // Stays in loading since no state set on error
-      expect(screen.getByText('Loading game...')).toBeInTheDocument();
+      expect(screen.getByText(/Loading game\.\.\./)).toBeInTheDocument();
     });
 
     consoleSpy.mockRestore();
   });
 
   it('calls room.leave on unmount if joined', async () => {
+    let storedCallback: (state: any) => void;
+    const mockStatePlaying = { ...mockState, roundState: 'playing', clone: jest.fn(() => ({ ...mockState, roundState: 'playing' })) };
+    mockRoom.onStateChange = jest.fn((cb) => {
+      storedCallback = cb;
+      cb(mockState.clone()); // Initial
+    });
+    mockClient.joinById.mockResolvedValue(mockRoom);
+
     const leaveSpy = jest.spyOn(mockRoom, 'leave');
 
     const { unmount } = render(<GamePage />);
@@ -144,7 +169,15 @@ describe('GamePage', () => {
       expect(mockClient.joinById).toHaveBeenCalledTimes(1);
     });
 
-    await screen.findByTestId('phaser-game');
+    act(() => {
+      storedCallback(mockStatePlaying);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading game...')).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('phaser-game')).toBeInTheDocument();
 
     unmount();
 

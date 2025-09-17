@@ -8,7 +8,7 @@ export class MazeRaceRoom extends Room<GameState> {
     this.state = new GameState();
     this.state.root = this.state;
   
-    if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+    if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log("MazeRaceRoom created!", options);
     }
   
@@ -37,7 +37,7 @@ export class MazeRaceRoom extends Room<GameState> {
   }
 
   onJoin(client: Client, options: any) {
-    if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+    if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log(client.sessionId, "joined!");
     }
     const player = new Player();
@@ -52,7 +52,7 @@ export class MazeRaceRoom extends Room<GameState> {
   }
 
   onLeave(client: Client, consented: boolean) {
-    if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+    if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log("MazeRaceRoom.onLeave called for client:", client.sessionId, "consented:", consented);
       console.log("Players after leave:", Array.from(this.state.players.values() as Iterable<Player>).map((p: Player) => p.name));
     }
@@ -60,13 +60,13 @@ export class MazeRaceRoom extends Room<GameState> {
   }
 
   onDispose() {
-    if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+    if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log("room", this.roomId, "disposing...");
     }
   }
 
   onStartGame(client: Client, message: any) {
-    if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+    if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log(`${client.sessionId} requested to start game`);
     }
     
@@ -80,6 +80,7 @@ export class MazeRaceRoom extends Room<GameState> {
         console.log('Starting game - host request with enough players');
       }
       this.state.roundState = 'playing';
+      this.broadcast('gameStarted');
       
       // Generate maze when game starts
       const maze = this.generateMaze();
@@ -95,12 +96,11 @@ export class MazeRaceRoom extends Room<GameState> {
         player.y = 0;
       });
       
-      this.broadcast('gameStarted');
-      if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+      if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
         console.log('Game started with maze generated and state updated for Colyseus sync');
       }
     } else {
-      if (process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+      if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
         console.log(`Start game rejected: isHost=${isHost}, players=${this.state.players.size}`);
       }
     }

@@ -6,9 +6,8 @@ import * as Phaser from 'phaser';
 import { Player } from 'shared/types';
 
 interface Props {
-  gameState: any;
-  room?: any; // Colyseus room for sending movement
-  sessionId?: string;
+  room: any; // Colyseus room for state and sending movement
+  sessionId: string;
 }
 
 interface OtherPlayer {
@@ -21,7 +20,7 @@ class MazeScene extends Phaser.Scene {
   grid: number[][] = [];
   player: Phaser.GameObjects.Rectangle | null = null;
   otherPlayerSprites = new Map<string, Phaser.GameObjects.Rectangle>();
-  tilesGroup: Phaser.GameObjects.Group | null = null;
+  tilesGroup: Phaser.GameObjects.Graphics[] = [];
   roundState: string = 'waiting';
   playerX = 0;
   playerY = 0;
@@ -74,7 +73,13 @@ class MazeScene extends Phaser.Scene {
       }
 
       // Setup keyboard input for local movement
-      (this.input.keyboard as any)?.on('keydown', this.handleKeyDown, this);
+      console.log('MazeScene: Setting up keyboard input');
+      if (this.input.keyboard) {
+        (this.input.keyboard as any).on('keydown', this.handleKeyDown, this);
+        console.log('Keyboard input enabled successfully');
+      } else {
+        console.error('Keyboard input not available');
+      }
     } catch (error) {
       console.error('MazeScene create error:', error);
     }
@@ -82,10 +87,12 @@ class MazeScene extends Phaser.Scene {
 
   updateGameState(data: any) {
     try {
+      console.log('updateGameState received:', { roundState: data.roundState, gridLength: data.grid?.length || 0 });
+      console.log('MazeScene updateGameState called with data:', data);
       if (!data) return;
 
       const newGrid = data.grid || [];
-      const gridChanged = !arraysEqual(this.grid.flat(), newGrid);
+      const gridChanged = !this.arraysEqual(this.grid.flat(), newGrid);
 
       // Reshape flat grid to 2D if it's a flat array (from Colyseus serialization)
       if (Array.isArray(newGrid) && newGrid.length === 441) {
@@ -97,7 +104,8 @@ class MazeScene extends Phaser.Scene {
         this.grid = newGrid.length ? newGrid : this.grid;
       }
 
-      this.roundState = data.roundState || this.roundState;
+      this.roundState = data.roundState ?? this.roundState;
+      console.log('MazeScene: Updated roundState to', this.roundState, 'Grid length:', this.grid.length);
       this.playerX = data.players?.get(this.sessionId)?.x || this.playerX || 1;
       this.playerY = data.players?.get(this.sessionId)?.y || this.playerY || 1;
       this.direction = data.players?.get(this.sessionId)?.direction || this.direction || 'down';
@@ -107,26 +115,27 @@ class MazeScene extends Phaser.Scene {
 
         // Destroy old tiles group
         if (this.tilesGroup) {
-          this.tilesGroup.destroy(true, true);
-          this.tilesGroup = null;
+          this.tilesGroup.forEach((tile: Phaser.GameObjects.Graphics) => tile.destroy(true));
+          this.tilesGroup = [];
         }
 
         // Re-render maze if grid ready
         if (this.grid && this.grid.length > 0) {
-          this.tilesGroup = this.add.group();
+          this.tilesGroup = (this.add as any).group();
+          console.log('MazeScene: Created tilesGroup with', this.grid.length * this.grid[0].length, 'tiles');
           for (let y = 0; y < this.grid.length; y++) {
             for (let x = 0; x < this.grid[y].length; x++) {
               const tile = this.add.graphics();
               const value = this.grid[y][x];
               if (value === 0) {
-                // Wall
-                tile.fillStyle(0x000000, 1);
+                // Wall - gray for debugging visibility
+                tile.fillStyle(0x888888, 1);
               } else {
                 // Path
                 tile.fillStyle(0xffffff, 1);
               }
               tile.fillRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-              this.tilesGroup.add(tile);
+              this.tilesGroup.push(tile);
             }
           }
         }
@@ -188,7 +197,11 @@ class MazeScene extends Phaser.Scene {
   }
 
   private handleKeyDown(event: KeyboardEvent) {
-    if (this.roundState !== 'playing' || this.isMoving || !this.player) return;
+    console.log('MazeScene handleKeyDown:', event.key, 'roundState:', this.roundState, 'isMoving:', this.isMoving, 'player:', !!this.player);
+    if (this.roundState !== 'playing' || this.isMoving || !this.player) {
+      console.log('Movement blocked:', { roundState: this.roundState, isMoving: this.isMoving, hasPlayer: !!this.player });
+      return;
+    }
 
     let newX = this.playerX;
     let newY = this.playerY;
@@ -226,17 +239,18 @@ class MazeScene extends Phaser.Scene {
     const oldX = this.playerX;
     const oldY = this.playerY;
 
+    console.log('Attempting move from', oldX, oldY, 'to', newX, newY, 'direction:', newDirection);
+
     // Check bounds and collision (1 = path)
-    if (
-      newX >= 0 &&
-      newX < this.grid[0].length &&
-      newY >= 0 &&
-      newY < this.grid.length &&
-      this.grid[newY][newX] === 1
-    ) {
+    const inBounds = newX >= 0 && newX < this.grid[0].length && newY >= 0 && newY < this.grid.length;
+    const isPath = inBounds ? this.grid[newY][newX] === 1 : false;
+    console.log('Collision check:', { newX, newY, inBounds, gridValue: inBounds ? this.grid[newY][newX] : 'OOB', isPath });
+    if (inBounds && isPath) {
       this.isMoving = true;
       const targetX = newX * this.tileSize + this.tileSize / 2;
       const targetY = newY * this.tileSize + this.tileSize / 2;
+
+      console.log('Valid move, starting tween to', targetX, targetY);
 
       // Smooth tween animation
       (this as any).tweens.add({
@@ -246,12 +260,14 @@ class MazeScene extends Phaser.Scene {
         duration: this.moveSpeed,
         ease: 'Linear',
         onComplete: () => {
+          console.log('Tween complete, updating position to', newX, newY, 'direction:', newDirection);
           this.playerX = newX;
           this.playerY = newY;
           this.direction = newDirection;
           this.updateVisibility();
           this.isMoving = false;
           if (this.room) {
+            console.log('Sending move to server:', { dx: newX - oldX, dy: newY - oldY, direction: newDirection });
             this.room.send('move', {
               dx: newX - oldX,
               dy: newY - oldY,
@@ -260,6 +276,8 @@ class MazeScene extends Phaser.Scene {
           }
         }
       });
+    } else {
+      console.log('Invalid move: out of bounds or wall');
     }
   }
 
@@ -288,7 +306,8 @@ class MazeScene extends Phaser.Scene {
         // Destroy old sprite if exists
         const oldSprite = this.otherPlayerSprites.get(id);
         if (oldSprite) {
-          oldSprite.destroy();
+          oldSprite.destroy(true);
+          console.log('Destroyed old sprite for', id);
         }
 
         // Create new sprite
@@ -407,94 +426,100 @@ class MazeScene extends Phaser.Scene {
   }
 }
 
-const PhaserGame = ({ gameState, room, sessionId = '' }: Props) => {
+const PhaserGame = ({ room, sessionId }: Props) => {
   const gameRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<any>(null);
   const gameInstanceRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!gameRef.current) return;
+    try {
+      if (!gameRef.current) return;
 
-    let game: any = null;
+      if (!room || !room.state) {
+        console.warn('PhaserGame init: Room or state incomplete, deferring game creation');
+        return;
+      }
 
-    const config = {
-      type: Phaser.AUTO,
-      parent: gameRef.current,
-      width: 672, // 21*32
-      height: 672,
-      scene: [MazeScene],
-      backgroundColor: '#000000',
-    };
+      let game: any = null;
 
-    game = new Phaser.Game(config);
+      const config = {
+        type: Phaser.AUTO,
+        parent: gameRef.current,
+        width: 672, // 21*32
+        height: 672,
+        scene: [MazeScene],
+        backgroundColor: '#000000',
+      };
 
-    // Start scene with initial empty data
-    game.scene.start('MazeScene', {
-      grid: [],
-      roundState: 'waiting',
-      playerX: 1,
-      playerY: 1,
-      sessionId: sessionId,
-      room: room,
-    });
+      game = new Phaser.Game(config);
 
-    // Store references
-    gameInstanceRef.current = game;
-    sceneRef.current = game.scene.getScene('MazeScene');
+      // Start scene with initial data from room
+      game.scene.start('MazeScene', {
+        sessionId,
+        room,
+      });
+
+      // Store references
+      gameInstanceRef.current = game;
+      sceneRef.current = game.scene.getScene('MazeScene');
+    } catch (error) {
+      console.error('PhaserGame init error:', error);
+    }
 
     return () => {
-      if (game) {
-        game.destroy(true);
+      if (gameInstanceRef.current) {
+        gameInstanceRef.current.destroy(true);
       }
     };
-  }, []); // Mount once
+  }, [room]); // Depend on room to recreate if needed
+
+  // Removed old gameState useEffect; handled in room useEffect below
 
   useEffect(() => {
-    if (!sceneRef.current || !gameState) return;
+    try {
+      if (!room || !sceneRef.current) return;
 
-    // Update scene with current gameState
-    sceneRef.current.updateGameState({
-      grid: gameState.grid,
-      roundState: gameState.roundState || 'waiting',
-      players: gameState.players,
-      sessionId,
-      room,
-    });
-  }, [gameState, sessionId, room]);
-
-  useEffect(() => {
-    if (!room || !sceneRef.current) return;
-
-    const handleStateChange = (changes: any[]) => {
-      // Process changes more efficiently - only update affected players
-      changes.forEach(change => {
-        if (change.field === 'players' && change.value) {
-          const playerId = change.path?.[1]; // From MapSchema path
-          if (playerId) {
-            const player = room.state.players.get(playerId);
-            if (player) {
-              sceneRef.current.updatePlayer(playerId, player.x, player.y, player.direction || 'down');
-            }
-          } else {
-            // Fallback full update if path not available
-            room.state.players.forEach((player: Player, id: string) => {
-              sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
-            });
-          }
-        }
+      // Initial full update
+      console.log('PhaserGame room useEffect: Initial update with roundState:', room.state.roundState, 'grid length:', room.state.grid?.length || 0);
+      sceneRef.current.updateGameState({
+        grid: room.state.grid,
+        roundState: room.state.roundState || 'waiting',
+        players: room.state.players,
+        sessionId,
+        room,
       });
-    };
 
-    room.state.onChange = handleStateChange;
+      // Force refresh after short delay to catch any pending state sync
+      setTimeout(() => {
+        console.log('PhaserGame forcing refresh update with roundState:', room.state.roundState, 'grid length:', room.state.grid?.length || 0);
+        sceneRef.current.updateGameState({
+          grid: room.state.grid,
+          roundState: room.state.roundState || 'waiting',
+          players: room.state.players,
+          sessionId,
+          room,
+        });
+      }, 300);
 
-    // Initial players update
-    room.state.players.forEach((player: Player, id: string) => {
-      sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
-    });
+      const handleStateChange = (changes: any[]) => {
+        console.log('PhaserGame room onChange: Changes detected, updating with roundState:', room.state.roundState);
+        sceneRef.current.updateGameState({
+          grid: room.state.grid,
+          roundState: room.state.roundState || 'waiting',
+          players: room.state.players,
+          sessionId,
+          room,
+        });
+      };
 
-    return () => {
-      room.state.onChange = null;
-    };
+      room.state.onChange = handleStateChange;
+
+      return () => {
+        room.state.onChange = null;
+      };
+    } catch (error) {
+      console.error('PhaserGame room useEffect error:', error);
+    }
   }, [room]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

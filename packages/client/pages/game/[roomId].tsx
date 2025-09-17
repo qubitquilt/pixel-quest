@@ -27,14 +27,25 @@ const GamePage = () => {
       } else {
         const newRoom = await client.joinById(roomId as string);
         joinedRoom = newRoom as Room<GameState>;
-        console.log('Joined new room');
+        console.log('Joined new room, initial state roundState:', joinedRoom.state.roundState, 'grid length:', joinedRoom.state.grid?.length || 0);
       }
       setRoom(joinedRoom);
       const localSessionId = joinedRoom.sessionId;
+      console.log('Game page initial clone roundState:', joinedRoom.state.roundState, 'grid length:', joinedRoom.state.grid?.length || 0);
       setGameState(joinedRoom.state.clone());
       joinedRoom.onStateChange((state) => {
+        console.log('Game page state change:', state.roundState, 'grid length:', state.grid?.length || 0);
+        if (state.roundState === 'playing') {
+          console.log('Game page detected playing state from onStateChange');
+        }
         setGameState(state.clone());
       });
+
+      // Force refresh gameState after delay to catch sync
+      setTimeout(() => {
+        console.log('Game page forcing refresh gameState roundState:', joinedRoom.state.roundState, 'grid length:', joinedRoom.state.grid?.length || 0);
+        setGameState(joinedRoom.state.clone());
+      }, 500);
       setJoined(true);
     } catch (err) {
       console.error('Failed to join game room', err);
@@ -51,14 +62,15 @@ const GamePage = () => {
     };
   }, [room, joined]);
 
-  if (!gameState) {
+  if (!gameState || gameState.roundState !== 'playing') {
     return <div>Loading game...</div>;
   }
 
   return (
     <div className="p-4">
       <h1>Game: {roomId}</h1>
-      <PhaserGame gameState={gameState} room={room} sessionId={localSessionId} />
+      <PhaserGame room={room} sessionId={localSessionId} />
+      <p className="mt-2 text-sm text-gray-500">Debug: roundState = {gameState.roundState}, grid length = {gameState.grid?.length || 0}</p>
     </div>
   );
 };

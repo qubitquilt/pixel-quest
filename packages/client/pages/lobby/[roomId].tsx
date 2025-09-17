@@ -75,10 +75,16 @@ const LobbyPage = () => {
         setGameState(state.clone());
       });
       
-      typedRoom.onMessage('gameStarted', () => {
-        console.log('Game started, navigating to game page');
-        router.push(`/game/${roomId}`);
-      });
+      // Listen for state change to detect game start instead of message
+      const handleStateChange = (state: GameState) => {
+        console.log('Lobby state change:', state.roundState);
+        setGameState(state.clone());
+        if (isHost && state.roundState === 'playing') {
+          console.log('Detected playing state, navigating to game page');
+          router.push(`/game/${roomId}`);
+        }
+      };
+      typedRoom.onStateChange(handleStateChange);
       
       setJoined(true);
     } catch (err) {
@@ -97,15 +103,17 @@ const LobbyPage = () => {
         setRoom(hostRoom);
         setGameState(hostRoom.state.clone());
         setJoined(true);
-        hostRoom.onStateChange((state) => {
-          console.log('State changed, players:', Array.from(state.players.values()).map(p => p.name));
+        const handleStateChange = (state: GameState) => {
+          console.log('Lobby state change:', state.roundState);
           setGameState(state.clone());
-        });
-        
-        hostRoom.onMessage('gameStarted', () => {
-          console.log('Game started, navigating to game page');
-          router.push(`/game/${roomId}`);
-        });
+          if (isHost && state.roundState === 'playing') {
+            console.log('Detected playing state, delaying navigation for sync');
+            setTimeout(() => {
+              router.push(`/game/${roomId}`);
+            }, 500);
+          }
+        };
+        hostRoom.onStateChange(handleStateChange);
         
         console.log('Auto-joined as host using global room');
         // Set initial gameState from host room
@@ -145,7 +153,7 @@ const LobbyPage = () => {
     if (!room) return;
     try {
       await room.send('startGame');
-      console.log('Start game message sent');
+      console.log('Start game message sent, waiting for state change');
     } catch (error) {
       console.error('Failed to send start game message:', error);
     }
@@ -185,7 +193,7 @@ const LobbyPage = () => {
           )}
           {gameState.roundState === 'playing' && (
             <div className="mt-4">
-              <PhaserGame gameState={gameState} room={room} sessionId={room?.sessionId || ''} />
+              <PhaserGame room={room} sessionId={room?.sessionId || ''} />
             </div>
           )}
         </>

@@ -33,6 +33,12 @@ class MazeScene extends Phaser.Scene {
   light: Phaser.GameObjects.Graphics | null = null;
   visualCones: Phaser.GameObjects.Graphics | null = null;
   isMoving = false;
+  // Pending sync tracking for server rejection
+  pendingExpectedX: number = 0;
+  pendingExpectedY: number = 0;
+  pendingOldX: number = 0;
+  pendingOldY: number = 0;
+  isPendingSync = false;
   sessionId: string = '';
   room: any = null;
   otherPlayers = new Map<string, OtherPlayer>();
@@ -109,16 +115,47 @@ class MazeScene extends Phaser.Scene {
       this.playerX = data.players?.get(this.sessionId)?.x || this.playerX || 1;
       this.playerY = data.players?.get(this.sessionId)?.y || this.playerY || 1;
       this.direction = data.players?.get(this.sessionId)?.direction || this.direction || 'down';
-
+  
+      // Handle server rejection: Check if pending move was rejected
+      if (this.isPendingSync) {
+        const serverX = data.players?.get(this.sessionId)?.x || this.playerX;
+        const serverY = data.players?.get(this.sessionId)?.y || this.playerY;
+        if (serverX !== this.pendingExpectedX || serverY !== this.pendingExpectedY) {
+          console.log('Move rejected by server, reverting to old position:', this.pendingOldX, this.pendingOldY);
+          // Revert local position
+          this.playerX = this.pendingOldX;
+          this.playerY = this.pendingOldY;
+          if (this.player) {
+            const oldPosX = this.pendingOldX * this.tileSize + this.tileSize / 2;
+            const oldPosY = this.pendingOldY * this.tileSize + this.tileSize / 2;
+            // Tween back to old position
+            (this as any).tweens.add({
+              targets: this.player,
+              x: oldPosX,
+              y: oldPosY,
+              duration: this.moveSpeed / 2,
+              ease: 'Linear',
+              onComplete: () => {
+                this.shakeEffect();
+              }
+            });
+          }
+          this.isPendingSync = false;
+        } else {
+          // Accepted, reset flags
+          this.isPendingSync = false;
+        }
+      }
+  
       if (gridChanged) {
         this.visibleCache.clear(); // Invalidate cache on grid change
-
+  
         // Destroy old tiles group
         if (this.tilesGroup) {
-          this.tilesGroup.forEach((tile: Phaser.GameObjects.Graphics) => tile.destroy(true));
+          this.tilesGroup.forEach((tile: Phaser.GameObjects.Graphics) => (tile as any).destroy(true));
           this.tilesGroup = [];
         }
-
+  
         // Re-render maze if grid ready
         if (this.grid && this.grid.length > 0) {
           this.tilesGroup = (this.add as any).group();
@@ -246,6 +283,13 @@ class MazeScene extends Phaser.Scene {
     const isPath = inBounds ? this.grid[newY][newX] === 1 : false;
     console.log('Collision check:', { newX, newY, inBounds, gridValue: inBounds ? this.grid[newY][newX] : 'OOB', isPath });
     if (inBounds && isPath) {
+      // Track for potential server rejection
+      this.pendingExpectedX = newX;
+      this.pendingExpectedY = newY;
+      this.pendingOldX = oldX;
+      this.pendingOldY = oldY;
+      this.isPendingSync = true;
+
       this.isMoving = true;
       const targetX = newX * this.tileSize + this.tileSize / 2;
       const targetY = newY * this.tileSize + this.tileSize / 2;
@@ -306,7 +350,7 @@ class MazeScene extends Phaser.Scene {
         // Destroy old sprite if exists
         const oldSprite = this.otherPlayerSprites.get(id);
         if (oldSprite) {
-          oldSprite.destroy(true);
+          (oldSprite as any).destroy(true);
           console.log('Destroyed old sprite for', id);
         }
 
@@ -419,6 +463,23 @@ class MazeScene extends Phaser.Scene {
     } catch (error) {
       console.error('MazeScene updateVisibility error:', error);
     }
+  }
+
+  private shakeEffect() {
+    if (!this.player) return;
+    // Simple horizontal shake feedback for rejection
+    (this as any).tweens.add({
+      targets: this.player,
+      x: '+=10',
+      duration: 50,
+      yoyo: true,
+      repeat: 4,
+      onComplete: () => {
+        // Ensure final position after shake
+        this.player!.x = this.playerX * this.tileSize + this.tileSize / 2;
+      }
+    });
+    console.log('Shake effect triggered for move rejection');
   }
 
   update() {

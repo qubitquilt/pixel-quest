@@ -35,8 +35,14 @@ jest.mock('phaser', () => ({
     room: any;
     moveSpeed: number;
     sessionId: string;
+    // Pending sync properties for rejection test
+    pendingExpectedX: number = 0;
+    pendingExpectedY: number = 0;
+    pendingOldX: number = 0;
+    pendingOldY: number = 0;
+    isPendingSync: boolean = false;
     otherPlayerSprites: Map<string, any>;
-  
+    
     constructor(config: any) {
       this.key = config?.key || 'MazeScene';
       this.data = {};
@@ -70,6 +76,11 @@ jest.mock('phaser', () => ({
       this.room = null;
       this.moveSpeed = 200;
       this.sessionId = '';
+      this.pendingExpectedX = 0;
+      this.pendingExpectedY = 0;
+      this.pendingOldX = 0;
+      this.pendingOldY = 0;
+      this.isPendingSync = false;
       this.otherPlayerSprites = new Map();
       this.computeVisibleTilesFor = jest.fn(() => [{x:0,y:0}]);
     }
@@ -119,10 +130,17 @@ jest.mock('phaser', () => ({
       const isPath = inBounds ? this.grid[newY][newX] === 1 : false;
   
       if (inBounds && isPath) {
+        // Track for potential server rejection (mirror real code)
+        this.pendingExpectedX = newX;
+        this.pendingExpectedY = newY;
+        this.pendingOldX = oldX;
+        this.pendingOldY = oldY;
+        this.isPendingSync = true;
+    
         this.isMoving = true;
         const targetX = newX * this.tileSize + this.tileSize / 2;
         const targetY = newY * this.tileSize + this.tileSize / 2;
-  
+    
         this.tweens.add({
           targets: this.player,
           x: targetX,
@@ -190,7 +208,35 @@ jest.mock('phaser', () => ({
       }
   
       this.roundState = data.roundState ?? this.roundState;
-  
+    
+      // Handle server rejection in mock (mirror real)
+      if (this.isPendingSync) {
+        const serverX = data.players?.get(this.sessionId)?.x || this.playerX;
+        const serverY = data.players?.get(this.sessionId)?.y || this.playerY;
+        if (serverX !== this.pendingExpectedX || serverY !== this.pendingExpectedY) {
+          // Revert
+          this.playerX = this.pendingOldX;
+          this.playerY = this.pendingOldY;
+          if (this.player) {
+            const oldPosX = this.pendingOldX * this.tileSize + this.tileSize / 2;
+            const oldPosY = this.pendingOldY * this.tileSize + this.tileSize / 2;
+            this.tweens.add({
+              targets: this.player,
+              x: oldPosX,
+              y: oldPosY,
+              duration: this.moveSpeed / 2,
+              ease: 'Linear',
+              onComplete: () => {
+                this.shakeEffect();
+              }
+            });
+          }
+          this.isPendingSync = false;
+        } else {
+          this.isPendingSync = false;
+        }
+      }
+    
       if (data.players) {
         data.players.forEach((player: any, id: string) => {
           if (id !== this.sessionId) {
@@ -257,6 +303,10 @@ jest.mock('phaser', () => ({
       });
     }
 
+    shakeEffect() {
+      // Mock implementation for test
+    }
+  
     init() {}
     preload() {}
     create() {}
@@ -379,6 +429,7 @@ describe('PhaserGame', () => {
       mockRoom = { send: jest.fn() };
       mockScene.room = mockRoom;
       mockScene.updateVisibility = jest.fn();
+      mockScene.shakeEffect = jest.fn();
       mockScene.otherPlayerSprites = new Map();
       mockScene.add = {
         ...mockScene.add,
@@ -461,6 +512,40 @@ describe('PhaserGame', () => {
       mockScene.handleKeyDown(event);
       expect(mockScene.tweens.add).not.toHaveBeenCalled();
       expect(mockScene.playerX).toBe(2);
+    });
+
+    it('reverts position and shakes on server rejection', () => {
+      // Setup for valid local move
+      const event = { key: 'ArrowRight' } as KeyboardEvent;
+      mockScene.handleKeyDown(event);
+      expect(mockScene.pendingExpectedX).toBe(2);
+      expect(mockScene.pendingOldX).toBe(1);
+      expect(mockScene.isPendingSync).toBe(true);
+
+      // Mock server state change: no update (rejection)
+      const mockServerPlayers = new Map();
+      mockServerPlayers.set('test-session', { x: 1, y: 1, direction: 'down' }); // Stays at old pos
+      mockScene.updateGameState({
+        players: mockServerPlayers,
+        roundState: 'playing',
+        grid: mockScene.grid.flat()
+      });
+
+      // Assert revert
+      expect(mockScene.playerX).toBe(1); // Reverted to old
+      expect(mockScene.playerY).toBe(1);
+      expect(mockScene.isPendingSync).toBe(false);
+
+      // Assert revert tween called (target old pos)
+      expect(mockScene.tweens.add).toHaveBeenCalledWith(expect.objectContaining({
+        targets: mockPlayer,
+        x: 48, // old pos 1*32 +16
+        y: 48,
+        duration: 100 // moveSpeed/2
+      }));
+
+      // Assert shake triggered (onComplete of revert)
+      expect(mockScene.shakeEffect).toHaveBeenCalled();
     });
   });
 

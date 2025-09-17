@@ -176,20 +176,35 @@ jest.mock('phaser', () => ({
         }
         this.updateVisibility();
       } else {
+        // Update other player state and sprite with tween for smooth movement
         this.otherPlayers.set(id, { x, y, direction });
-        const oldSprite = this.otherPlayerSprites.get(id);
-        if (oldSprite) {
-          oldSprite.destroy(true);
+  
+        let sprite = this.otherPlayerSprites.get(id);
+        const targetX = x * this.tileSize + this.tileSize / 2;
+        const targetY = y * this.tileSize + this.tileSize / 2;
+  
+        if (!sprite) {
+          // New player join: create sprite
+          sprite = this.add.rectangle(
+            targetX,
+            targetY,
+            28,
+            28,
+            0x00ff00 // Green for other players
+          );
+          sprite.setOrigin(0.5);
+          this.otherPlayerSprites.set(id, sprite);
+        } else {
+          // Existing player: tween to new position
+          this.tweens.add({
+            targets: sprite,
+            x: targetX,
+            y: targetY,
+            duration: this.moveSpeed,
+            ease: 'Linear'
+          });
         }
-        const sprite = this.add.rectangle(
-          x * this.tileSize + this.tileSize / 2,
-          y * this.tileSize + this.tileSize / 2,
-          28,
-          28,
-          0x00ff00
-        );
-        sprite.setOrigin(0.5);
-        this.otherPlayerSprites.set(id, sprite);
+  
         this.updateVisibility();
       }
     }
@@ -249,6 +264,16 @@ jest.mock('phaser', () => ({
               this.player.x = this.playerX * this.tileSize + this.tileSize / 2;
               this.player.y = this.playerY * this.tileSize + this.tileSize / 2;
             }
+          }
+        });
+  
+        // Remove players that left the room
+        const currentPlayerIds = new Set(Array.from(data.players.keys()));
+        this.otherPlayerSprites.forEach((sprite, id) => {
+          if (id !== this.sessionId && !currentPlayerIds.has(id)) {
+            sprite.destroy(true);
+            this.otherPlayerSprites.delete(id);
+            this.otherPlayers.delete(id);
           }
         });
       }
@@ -588,5 +613,119 @@ describe('PhaserGame', () => {
       expect(mockScene.updatePlayer).not.toHaveBeenCalled();
       expect(mockScene.playerX).toBe(0); // unchanged
     });
+  });
+});
+describe('Other Player Smooth Updates and Leaves', () => {
+  let mockScene: any;
+  let mockSprite: any;
+
+  beforeEach(() => {
+    mockScene = new (jest.requireMock('phaser').Scene)();
+    mockScene.sessionId = 'test-session';
+    mockScene.grid = [[1,1,1],[1,1,1],[1,1,1]];
+    mockScene.tileSize = 32;
+    mockScene.moveSpeed = 200;
+    mockScene.roundState = 'playing';
+    mockScene.otherPlayers = new Map();
+    mockScene.otherPlayerSprites = new Map();
+    mockScene.add = {
+      ...mockScene.add,
+      rectangle: jest.fn(() => mockSprite),
+    };
+    mockSprite = { setOrigin: jest.fn().mockReturnThis(), destroy: jest.fn() };
+    mockScene.updateVisibility = jest.fn();
+    jest.spyOn(mockScene.tweens, 'add');
+  });
+
+  it('tweens existing other player sprite to new position without destroying', () => {
+    // Setup existing other
+    mockScene.otherPlayerSprites.set('other1', mockSprite);
+    mockScene.otherPlayers.set('other1', { x: 0, y: 0, direction: 'down' });
+
+    mockScene.updatePlayer('other1', 1, 1, 'right');
+
+    expect(mockScene.tweens.add).toHaveBeenCalledWith(expect.objectContaining({
+      targets: mockSprite,
+      x: 48, // 1*32 +16
+      y: 48,
+      duration: 200,
+      ease: 'Linear'
+    }));
+    expect(mockSprite.destroy).not.toHaveBeenCalled();
+    expect(mockScene.otherPlayers.get('other1')).toEqual({ x: 1, y: 1, direction: 'right' });
+    expect(mockScene.updateVisibility).toHaveBeenCalled();
+  });
+
+  it('creates new sprite for joining other player without tween', () => {
+    mockScene.updatePlayer('other2', 2, 0, 'left');
+
+    expect(mockScene.add.rectangle).toHaveBeenCalledWith(80, 16, 28, 28, 0x00ff00); // pos 2,0
+    expect(mockSprite.setOrigin).toHaveBeenCalled();
+    expect(mockScene.otherPlayerSprites.get('other2')).toBe(mockSprite);
+    expect(mockScene.tweens.add).not.toHaveBeenCalled();
+    expect(mockScene.otherPlayers.get('other2')).toEqual({ x: 2, y: 0, direction: 'left' });
+    expect(mockScene.updateVisibility).toHaveBeenCalled();
+  });
+
+  it('destroys sprite and clears maps for left player in updateGameState', () => {
+    // Setup existing other
+    const mockExistingSprite = { destroy: jest.fn() };
+    mockScene.otherPlayerSprites.set('left-player', mockExistingSprite);
+    mockScene.otherPlayers.set('left-player', { x: 0, y: 0, direction: 'down' });
+
+    const mockPlayers = new Map();
+    mockPlayers.set('test-session', { x: 0, y: 0, direction: 'down' });
+    // No 'left-player' in mockPlayers
+
+    mockScene.updateGameState({
+      players: mockPlayers,
+      roundState: 'playing',
+      grid: mockScene.grid.flat()
+    });
+
+    expect(mockExistingSprite.destroy).toHaveBeenCalledWith(true);
+    expect(mockScene.otherPlayerSprites.has('left-player')).toBe(false);
+    expect(mockScene.otherPlayers.has('left-player')).toBe(false);
+  });
+
+  it('handles multiple other players with separate tweens', () => {
+    const mockSprite1 = { setOrigin: jest.fn().mockReturnThis() };
+    const mockSprite2 = { setOrigin: jest.fn().mockReturnThis() };
+    mockScene.add.rectangle
+      .mockReturnValueOnce(mockSprite1)
+      .mockReturnValueOnce(mockSprite2);
+
+    // Create two others
+    mockScene.updatePlayer('other1', 1, 1, 'right');
+    mockScene.updatePlayer('other2', 0, 2, 'down');
+
+    expect(mockScene.otherPlayerSprites.size).toBe(2);
+    expect(mockScene.tweens.add).not.toHaveBeenCalled(); // Both new, no tween
+    expect(mockScene.updateVisibility).toHaveBeenCalledTimes(2);
+  });
+
+  it('handles rapid updates to same other player with multiple tweens', () => {
+    // Setup existing
+    mockScene.otherPlayerSprites.set('other1', mockSprite);
+    mockScene.otherPlayers.set('other1', { x: 0, y: 0, direction: 'down' });
+
+    // First update
+    mockScene.updatePlayer('other1', 1, 1, 'right');
+    // Second rapid update
+    mockScene.updatePlayer('other1', 2, 1, 'right');
+
+    expect(mockScene.tweens.add).toHaveBeenCalledTimes(2);
+    expect(mockScene.tweens.add.mock.calls[0][0]).toMatchObject({
+      targets: mockSprite,
+      x: 48,
+      y: 48
+    });
+    expect(mockScene.tweens.add.mock.calls[1][0]).toMatchObject({
+      targets: mockSprite,
+      x: 80,
+      y: 48
+    });
+    expect(mockSprite.destroy).not.toHaveBeenCalled();
+    expect(mockScene.otherPlayers.get('other1')).toEqual({ x: 2, y: 1, direction: 'right' });
   });
 });

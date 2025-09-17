@@ -344,26 +344,36 @@ class MazeScene extends Phaser.Scene {
         this.direction = direction;
         this.updatePlayerPosition(x, y);
       } else {
-        // Update other player state
+        // Update other player state and sprite with tween for smooth movement
         this.otherPlayers.set(id, { x, y, direction });
 
-        // Destroy old sprite if exists
-        const oldSprite = this.otherPlayerSprites.get(id);
-        if (oldSprite) {
-          (oldSprite as any).destroy(true);
-          console.log('Destroyed old sprite for', id);
-        }
+        let sprite = this.otherPlayerSprites.get(id);
+        const targetX = x * this.tileSize + this.tileSize / 2;
+        const targetY = y * this.tileSize + this.tileSize / 2;
 
-        // Create new sprite
-        const sprite = this.add.rectangle(
-          x * this.tileSize + this.tileSize / 2,
-          y * this.tileSize + this.tileSize / 2,
-          28,
-          28,
-          0x00ff00 // Green for other players
-        );
-        sprite.setOrigin(0.5);
-        this.otherPlayerSprites.set(id, sprite);
+        if (!sprite) {
+          // New player join: create sprite
+          console.log('Created new sprite for player', id);
+          sprite = this.add.rectangle(
+            targetX,
+            targetY,
+            28,
+            28,
+            0x00ff00 // Green for other players
+          );
+          sprite.setOrigin(0.5);
+          this.otherPlayerSprites.set(id, sprite);
+        } else {
+          // Existing player: tween to new position
+          console.log('Tweening sprite for player', id, 'to', x, y);
+          (this as any).tweens.add({
+            targets: sprite,
+            x: targetX,
+            y: targetY,
+            duration: this.moveSpeed,
+            ease: 'Linear'
+          });
+        }
 
         this.updateVisibility();
       }

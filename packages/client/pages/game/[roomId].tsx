@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Room } from 'colyseus.js';
 import { GameState } from '@/shared/types';
 import { client } from '@/lib/colyseus';
@@ -14,29 +14,33 @@ const GamePage = () => {
   const { roomId } = router.query;
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [room, setRoom] = useState<Room<GameState> | null>(null);
+  const [joined, setJoined] = useState(false);
+
+  const joinGame = useCallback(async () => {
+    if (!roomId || joined) return;
+    try {
+      const joinedRoom = await client.joinById(roomId as string);
+      const typedRoom = joinedRoom as Room<GameState>;
+      setRoom(typedRoom);
+      setGameState(typedRoom.state.clone());
+      typedRoom.onStateChange((state) => {
+        setGameState(state.clone());
+      });
+      setJoined(true);
+    } catch (err) {
+      console.error('Failed to join game room', err);
+    }
+  }, [roomId, joined]);
 
   useEffect(() => {
-    if (roomId) {
-      const joinGame = async () => {
-        try {
-          const joinedRoom = await client.joinById(roomId as string);
-          const typedRoom = joinedRoom as Room<GameState>;
-          setRoom(typedRoom);
-          setGameState(typedRoom.state.clone());
-          typedRoom.onStateChange((state) => {
-            setGameState(state.clone());
-          });
-        } catch (err) {
-          console.error('Failed to join game room', err);
-        }
-      };
-      joinGame();
-    }
+    joinGame();
+  }, [joinGame]);
 
+  useEffect(() => {
     return () => {
-      room?.leave();
+      if (joined) room?.leave();
     };
-  }, [roomId, room]);
+  }, [room, joined]);
 
   if (!gameState) {
     return <div>Loading game...</div>;

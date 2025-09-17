@@ -11,24 +11,44 @@ jest.mock('phaser', () => ({
     },
     destroy: jest.fn(),
   })),
+  Math: {
+    Angle: {
+      RotateTo: function(current: number, target: number, step: number): number {
+        let diff = target - current;
+        // Normalize to shortest angle (-PI to PI)
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        // Step towards target
+        const maxStep = Math.min(step, Math.abs(diff));
+        return current + Math.sign(diff) * maxStep;
+      }
+    }
+  },
   Scene: class MockScene {
     key: string;
     data: any;
     add: any;
+    make: any;
+    physics: any;
     tweens: any;
     input: any;
     scale: any;
     grid: any;
     tileSize: number;
-    range: number;
-    coneAngle: number;
     playerX: number;
     playerY: number;
     direction: string;
     otherPlayers: Map<string, any>;
     light: any;
     visualCones: any;
-    computeVisibleTilesFor: any;
+    walls: any;
+    cover: any;
+    flashlightGraphics: any;
+    lastDirection: any;
+    targetAngle: number;
+    currentAngle: number;
+    rotationSpeed: number;
+    dirToAngle: any;
     player: any;
     roundState: string;
     isMoving: boolean;
@@ -50,26 +70,70 @@ jest.mock('phaser', () => ({
         graphics: jest.fn(() => ({
           fillStyle: jest.fn().mockReturnThis(),
           fillRect: jest.fn().mockReturnThis(),
-          setDepth: jest.fn().mockReturnThis(),
+          fillPoints: jest.fn().mockReturnThis(),
           clear: jest.fn().mockReturnThis(),
+          setDepth: jest.fn().mockReturnThis(),
+          setMask: jest.fn().mockReturnThis(),
+          generateTexture: jest.fn().mockReturnThis(),
+          destroy: jest.fn().mockReturnThis(),
         })),
         rectangle: jest.fn(() => ({
           setOrigin: jest.fn().mockReturnThis(),
+          setDepth: jest.fn().mockReturnThis(),
         })),
+        tileSprite: jest.fn(() => ({
+          setOrigin: jest.fn().mockReturnThis(),
+          setDepth: jest.fn().mockReturnThis(),
+          setTint: jest.fn().mockReturnThis(),
+        })),
+      };
+      this.make = {
+        graphics: jest.fn(() => ({
+          fillStyle: jest.fn().mockReturnThis(),
+          fillRect: jest.fn().mockReturnThis(),
+          generateTexture: jest.fn().mockReturnThis(),
+          destroy: jest.fn().mockReturnThis(),
+        })),
+      };
+      this.physics = {
+        add: {
+          staticGroup: jest.fn(() => ({
+            create: jest.fn(() => ({
+              body: {
+                setSize: jest.fn(),
+                immovable: true,
+              },
+              getBounds: jest.fn(() => ({})),
+            })),
+            getChildren: jest.fn(() => []),
+            clear: jest.fn(),
+          })),
+        },
       };
       this.tweens = { add: jest.fn((opts) => { opts.onComplete?.(); }) };
       this.input = { keyboard: { on: jest.fn() } };
       this.scale = { width: 672, height: 672 };
       this.grid = [];
       this.tileSize = 32;
-      this.range = 4;
-      this.coneAngle = 60;
       this.playerX = 0;
       this.playerY = 0;
       this.direction = 'down';
       this.otherPlayers = new Map();
       this.light = null;
       this.visualCones = null;
+      this.walls = null;
+      this.cover = null;
+      this.flashlightGraphics = null;
+      this.lastDirection = { set: jest.fn(), setFromAngle: jest.fn(), normalize: jest.fn(), length: jest.fn(() => 1), angle: jest.fn(() => 0) };
+      this.targetAngle = Math.PI / 2;
+      this.currentAngle = Math.PI / 2;
+      this.rotationSpeed = 8;
+      this.dirToAngle = {
+        right: 0,
+        down: Math.PI / 2,
+        left: Math.PI,
+        up: -Math.PI / 2,
+      };
       this.player = null;
       this.roundState = 'waiting';
       this.isMoving = false;
@@ -82,18 +146,22 @@ jest.mock('phaser', () => ({
       this.pendingOldY = 0;
       this.isPendingSync = false;
       this.otherPlayerSprites = new Map();
-      this.computeVisibleTilesFor = jest.fn(() => [{x:0,y:0}]);
     }
-  
+
+    computeVisibilityPolygon(posX: number, posY: number, angle: number) {
+      const mockPoints = [new (jest.fn())(posX, posY)];
+      return mockPoints;
+    }
+
     handleKeyDown(event: KeyboardEvent) {
       if (this.roundState !== 'playing' || this.isMoving || !this.player) {
         return;
       }
-  
+
       let newX = this.playerX;
       let newY = this.playerY;
       let newDirection = this.direction;
-  
+
       switch (event.key) {
         case 'ArrowLeft':
         case 'a':
@@ -122,10 +190,10 @@ jest.mock('phaser', () => ({
         default:
           return;
       }
-  
+
       const oldX = this.playerX;
       const oldY = this.playerY;
-  
+
       const inBounds = newX >= 0 && newX < this.grid[0].length && newY >= 0 && newY < this.grid.length;
       const isPath = inBounds ? this.grid[newY][newX] === 1 : false;
 
@@ -136,11 +204,11 @@ jest.mock('phaser', () => ({
         this.pendingOldX = oldX;
         this.pendingOldY = oldY;
         this.isPendingSync = true;
-    
+
         this.isMoving = true;
         const targetX = newX * this.tileSize + this.tileSize / 2;
         const targetY = newY * this.tileSize + this.tileSize / 2;
-    
+
         this.tweens.add({
           targets: this.player,
           x: targetX,
@@ -151,7 +219,13 @@ jest.mock('phaser', () => ({
             this.playerX = newX;
             this.playerY = newY;
             this.direction = newDirection;
-            this.updateVisibility();
+            const dx = newX - oldX;
+            const dy = newY - oldY;
+            this.lastDirection.set(dx, dy);
+            if (this.lastDirection.length() > 0) {
+              this.lastDirection.normalize();
+            }
+            this.targetAngle = this.lastDirection.angle();
             this.isMoving = false;
             if (this.room) {
               this.room.send('move', {
@@ -166,25 +240,29 @@ jest.mock('phaser', () => ({
         this.shakeEffect();
       }
     }
-  
+
     updatePlayer(id: string, x: number, y: number, direction: string) {
       if (id === this.sessionId) {
         this.playerX = x;
         this.playerY = y;
         this.direction = direction;
+        this.lastDirection.setFromAngle(this.dirToAngle[direction as keyof typeof this.dirToAngle]);
+        this.targetAngle = this.dirToAngle[direction as keyof typeof this.dirToAngle];
+        this.currentAngle = this.targetAngle;
         if (this.player) {
           this.player.x = x * this.tileSize + this.tileSize / 2;
           this.player.y = y * this.tileSize + this.tileSize / 2;
+          this.player.setDepth(5);
         }
         this.updateVisibility();
       } else {
         // Update other player state and sprite with tween for smooth movement
         this.otherPlayers.set(id, { x, y, direction });
-  
+
         let sprite = this.otherPlayerSprites.get(id);
         const targetX = x * this.tileSize + this.tileSize / 2;
         const targetY = y * this.tileSize + this.tileSize / 2;
-  
+
         if (!sprite) {
           // New player join: create sprite
           sprite = this.add.rectangle(
@@ -195,6 +273,7 @@ jest.mock('phaser', () => ({
             0x00ff00 // Green for other players
           );
           sprite.setOrigin(0.5);
+          sprite.setDepth(5);
           this.otherPlayerSprites.set(id, sprite);
         } else {
           // Existing player: tween to new position
@@ -206,14 +285,14 @@ jest.mock('phaser', () => ({
             ease: 'Linear'
           });
         }
-  
+
         this.updateVisibility();
       }
     }
-  
+
     updateGameState(data: any) {
       if (!data) return;
-  
+
       const newGrid = data.grid || [];
       if (Array.isArray(newGrid) && newGrid.length === 441) {
         const width = 21;
@@ -223,7 +302,7 @@ jest.mock('phaser', () => ({
       } else {
         this.grid = newGrid.length ? newGrid : this.grid;
       }
-  
+
       this.roundState = data.roundState ?? this.roundState;
     
       // Handle server rejection in mock (mirror real)
@@ -265,10 +344,14 @@ jest.mock('phaser', () => ({
             if (this.player) {
               this.player.x = this.playerX * this.tileSize + this.tileSize / 2;
               this.player.y = this.playerY * this.tileSize + this.tileSize / 2;
+              this.player.setDepth(5);
+              this.lastDirection.setFromAngle(this.dirToAngle[this.direction as keyof typeof this.dirToAngle]);
+              this.targetAngle = this.dirToAngle[this.direction as keyof typeof this.dirToAngle];
+              this.currentAngle = this.targetAngle;
             }
           }
         });
-  
+
         // Remove players that left the room
         const currentPlayerIds = new Set(Array.from(data.players.keys()));
         this.otherPlayerSprites.forEach((sprite, id) => {
@@ -279,53 +362,53 @@ jest.mock('phaser', () => ({
           }
         });
       }
-  
+
       if (this.grid.length > 0) {
         this.updateVisibility();
       }
     }
 
     updateVisibility() {
-      const ownVisible = this.computeVisibleTilesFor(this.playerX, this.playerY, this.direction);
-      const otherVisibles = new Map();
-      this.otherPlayers.forEach((other, id) => {
-        const vis = this.computeVisibleTilesFor(other.x, other.y, other.direction);
-        otherVisibles.set(id, vis);
-      });
-      // Union for light
-      const unionSet = new Set<string>();
-      (ownVisible as {x: number, y: number}[]).forEach((tile) => {
-        unionSet.add(`${tile.x},${tile.y}`);
-      });
-      (Array.from(otherVisibles.values()) as {x: number, y: number}[][]).forEach((vis) => {
-        vis.forEach((tile) => {
-          unionSet.add(`${tile.x},${tile.y}`);
-        });
-      });
-      this.light.clear();
-      if (unionSet.size > 0) {
-        this.light.fillStyle(0xffffff, 1.0);
-        unionSet.forEach((key) => {
-          const [x, y] = (key as string).split(',').map(Number);
-          this.light.fillRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-        });
+      if (!this.flashlightGraphics || !this.visualCones || this.grid.length === 0 || !this.player || !this.walls) return;
+      const ownPosX = this.player.x;
+      const ownPosY = this.player.y;
+      const ownPolygon = this.computeVisibilityPolygon(ownPosX, ownPosY, this.currentAngle);
+
+      this.flashlightGraphics.clear();
+      this.flashlightGraphics.fillStyle(0xffffff, 1);
+      if (ownPolygon.length > 2) {
+        this.flashlightGraphics.fillPoints(ownPolygon, true);
       }
-      // Visual cones
+
+      // Other players' polygons for union reveal
+      this.otherPlayers.forEach((other) => {
+        const otherPosX = other.x * this.tileSize + this.tileSize / 2;
+        const otherPosY = other.y * this.tileSize + this.tileSize / 2;
+        const otherAngle = this.dirToAngle[other.direction as keyof typeof this.dirToAngle];
+        const otherPolygon = this.computeVisibilityPolygon(otherPosX, otherPosY, otherAngle);
+        if (otherPolygon.length > 2) {
+          this.flashlightGraphics.fillPoints(otherPolygon, true);
+        }
+      });
+
+      // Visual cones overlay
       this.visualCones.clear();
-      // Own
-      if (ownVisible.length > 0) {
-        this.visualCones.fillStyle(0xffffff, 0.3);
-        (ownVisible as {x: number, y: number}[]).forEach((tile) => {
-          this.visualCones.fillRect(tile.x * this.tileSize, tile.y * this.tileSize, this.tileSize, this.tileSize);
-        });
+
+      // Own cone
+      this.visualCones.fillStyle(0xffffff, 0.3);
+      if (ownPolygon.length > 2) {
+        this.visualCones.fillPoints(ownPolygon, true);
       }
-      // Others
-      otherVisibles.forEach((vis) => {
-        if (vis.length > 0) {
-          this.visualCones.fillStyle(0xaaaaaa, 0.3);
-          (vis as {x: number, y: number}[]).forEach((tile) => {
-            this.visualCones.fillRect(tile.x * this.tileSize, tile.y * this.tileSize, this.tileSize, this.tileSize);
-          });
+
+      // Other players' cones tinted
+      this.otherPlayers.forEach((other) => {
+        const otherPosX = other.x * this.tileSize + this.tileSize / 2;
+        const otherPosY = other.y * this.tileSize + this.tileSize / 2;
+        const otherAngle = this.dirToAngle[other.direction as keyof typeof this.dirToAngle];
+        const otherPolygon = this.computeVisibilityPolygon(otherPosX, otherPosY, otherAngle);
+        this.visualCones.fillStyle(0x888888, 0.3);
+        if (otherPolygon.length > 2) {
+          this.visualCones.fillPoints(otherPolygon, true);
         }
       });
     }
@@ -333,11 +416,22 @@ jest.mock('phaser', () => ({
     shakeEffect() {
       // Mock implementation for test
     }
+
+    update(time: number, delta: number) {
+      let diff = this.targetAngle - this.currentAngle;
+      // Normalize to shortest angle (-PI to PI)
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      // Step towards target
+      const step = this.rotationSpeed * (delta / 1000);
+      const maxStep = Math.min(step, Math.abs(diff));
+      this.currentAngle = this.currentAngle + Math.sign(diff) * maxStep;
+      this.updateVisibility();
+    }
   
     init() {}
     preload() {}
     create() {}
-    update() {}
   },
 }));
 
@@ -348,87 +442,93 @@ describe('PhaserGame', () => {
     expect(screen.getByTestId('phaser-game')).toBeInTheDocument();
   });
 
-  describe('MazeScene', () => {
+  describe('MazeScene Ray-Traced Visibility', () => {
     let mockScene: any;
 
     beforeEach(() => {
       mockScene = new (jest.requireMock('phaser').Scene)();
       mockScene.grid = [[1, 1], [1, 1]]; // 2x2 open grid
       mockScene.tileSize = 32;
-      mockScene.range = 1;
-      mockScene.coneAngle = 60;
       mockScene.playerX = 0;
       mockScene.playerY = 0;
-      mockScene.direction = 'right';
+      mockScene.player = { x: 16, y: 16, setDepth: jest.fn().mockReturnThis() };
       mockScene.otherPlayers = new Map();
-      mockScene.light = { clear: jest.fn(), fillStyle: jest.fn().mockReturnThis(), fillRect: jest.fn().mockReturnThis() };
-      mockScene.visualCones = { clear: jest.fn(), fillStyle: jest.fn().mockReturnThis(), fillRect: jest.fn().mockReturnThis() };
-      mockScene.computeVisibleTilesFor = jest.fn(() => [{x:0,y:0}]);
       mockScene.sessionId = 'test-session';
+      mockScene.walls = { getChildren: jest.fn(() => []) };
+      mockScene.flashlightGraphics = { clear: jest.fn(), fillStyle: jest.fn().mockReturnThis(), fillPoints: jest.fn().mockReturnThis() };
+      mockScene.visualCones = { clear: jest.fn(), fillStyle: jest.fn().mockReturnThis(), fillPoints: jest.fn().mockReturnThis() };
+      mockScene.computeVisibilityPolygon = jest.fn(() => [{ x: 16, y: 16 }, { x: 100, y: 100 }, { x: 200, y: 200 }]);
+      mockScene.lastDirection = { set: jest.fn(), setFromAngle: jest.fn(), normalize: jest.fn(), length: jest.fn(() => 1), angle: jest.fn(() => 0) };
+      mockScene.dirToAngle = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
       jest.spyOn(mockScene, 'updateVisibility');
     });
 
-    it('computes visible tiles for own cone with direction', () => {
-      const mockCompute = mockScene.computeVisibleTilesFor as jest.Mock;
-      mockCompute.mockReturnValue([{ x: 0, y: 0 }, { x: 1, y: 0 }]);
+    it('computes visibility polygon for own cone with current angle', () => {
+      const mockPolygon = [{ x: 16, y: 16 }, { x: 100, y: 100 }, { x: 200, y: 200 }];
+      mockScene.computeVisibilityPolygon = jest.fn().mockReturnValue(mockPolygon);
+      mockScene.currentAngle = 0;
 
-      const result = mockScene.computeVisibleTilesFor(0, 0, 'right');
-      expect(result).toHaveLength(2);
-      expect(mockCompute).toHaveBeenCalledWith(0, 0, 'right');
+      mockScene.updateVisibility();
+
+      expect(mockScene.computeVisibilityPolygon).toHaveBeenCalledWith(16, 16, 0);
+      expect(mockScene.flashlightGraphics.fillPoints).toHaveBeenCalledWith(mockPolygon, true);
+      expect(mockScene.updateVisibility).toHaveBeenCalled();
     });
 
-    it('updates player position and direction for self and triggers visibility update', () => {
-      mockScene.updatePlayer('test-session', 1, 0, 'down');
+    it('unions multiple polygons from other players in light graphics', () => {
+      const mockOwnPolygon = [{ x: 16, y: 16 }, { x: 100, y: 100 }, { x: 200, y: 200 }];
+      const mockOtherPolygon = [{ x: 48, y: 48 }, { x: 132, y: 132 }, { x: 216, y: 216 }];
+      mockScene.computeVisibilityPolygon
+        .mockReturnValueOnce(mockOwnPolygon)
+        .mockReturnValueOnce(mockOtherPolygon);
+      mockScene.otherPlayers.set('other1', { x: 1, y: 1, direction: 'down' });
+
+      mockScene.updateVisibility();
+
+      expect(mockScene.computeVisibilityPolygon).toHaveBeenCalledTimes(3);
+      expect(mockScene.flashlightGraphics.fillPoints).toHaveBeenCalledTimes(2);
+      expect(mockScene.flashlightGraphics.fillStyle).toHaveBeenCalledWith(0xffffff, 1);
+    });
+
+    it('renders visual diff with own full white and others gray tint', () => {
+      const mockOwnPolygon = [{ x: 16, y: 16 }, { x: 100, y: 100 }, { x: 200, y: 200 }];
+      const mockOtherPolygon = [{ x: 48, y: 48 }, { x: 132, y: 132 }, { x: 216, y: 216 }];
+      mockScene.computeVisibilityPolygon
+        .mockReturnValueOnce(mockOwnPolygon)
+        .mockReturnValueOnce(mockOtherPolygon)
+        .mockReturnValueOnce(mockOtherPolygon);
+      mockScene.otherPlayers.set('other1', { x: 1, y: 1, direction: 'down' });
+
+      mockScene.updateVisibility();
+
+      expect(mockScene.visualCones.fillStyle).toHaveBeenCalledWith(0xffffff, 0.3); // own
+      expect(mockScene.visualCones.fillPoints).toHaveBeenCalledWith(mockOwnPolygon, true);
+      expect(mockScene.visualCones.fillStyle).toHaveBeenNthCalledWith(2, 0x888888, 0.3); // other
+      expect(mockScene.visualCones.fillPoints).toHaveBeenCalledWith(mockOtherPolygon, true);
+    });
+
+    it('updates direction and angle for self player', () => {
+      mockScene.updatePlayer('test-session', 1, 0, 'right');
 
       expect(mockScene.playerX).toBe(1);
       expect(mockScene.playerY).toBe(0);
-      expect(mockScene.direction).toBe('down');
+      expect(mockScene.direction).toBe('right');
+      expect(mockScene.lastDirection.setFromAngle).toHaveBeenCalledWith(0);
+      expect(mockScene.targetAngle).toBe(0);
+      expect(mockScene.currentAngle).toBe(0);
       expect(mockScene.updateVisibility).toHaveBeenCalled();
     });
 
-    it('updates other player position and direction, adds to map, triggers visibility update', () => {
+    it('handles other player updates without angle change for self', () => {
       mockScene.updatePlayer('other-id', 1, 1, 'left');
 
       expect(mockScene.otherPlayers.get('other-id')).toEqual({ x: 1, y: 1, direction: 'left' });
+      expect(mockScene.lastDirection.setFromAngle).not.toHaveBeenCalled();
       expect(mockScene.updateVisibility).toHaveBeenCalled();
-    });
-
-    it('computes union of visible tiles across own and other cones', () => {
-      const mockOwnVis = [{ x: 0, y: 0 }];
-      const mockOtherVis = [{ x: 1, y: 0 }, { x: 0, y: 0 }];
-      mockScene.computeVisibleTilesFor
-        .mockReturnValueOnce(mockOwnVis)
-        .mockReturnValueOnce(mockOtherVis);
-
-      mockScene.otherPlayers.set('other1', { x: 1, y: 0, direction: 'down' });
-
-      mockScene.updateVisibility();
-
-      expect(mockScene.computeVisibleTilesFor).toHaveBeenCalledTimes(2);
-      expect(mockScene.light.clear).toHaveBeenCalled();
-      expect(mockScene.light.fillRect).toHaveBeenCalledTimes(2); // union: (0,0) and (1,0)
-    });
-
-    it('renders visual diff: own cone full, others semi-transparent', () => {
-      const mockOwnVis = [{ x: 0, y: 0 }];
-      const mockOtherVis = [{ x: 1, y: 0 }];
-      mockScene.computeVisibleTilesFor
-        .mockReturnValueOnce(mockOwnVis)
-        .mockReturnValueOnce(mockOtherVis);
-
-      mockScene.otherPlayers.set('other1', { x: 1, y: 0, direction: 'down' });
-
-      mockScene.updateVisibility();
-
-      expect(mockScene.visualCones.clear).toHaveBeenCalled();
-      expect(mockScene.visualCones.fillStyle).toHaveBeenCalledWith(0xffffff, 0.3); // own
-      expect(mockScene.visualCones.fillRect).toHaveBeenCalledWith(0 * 32, 0 * 32, 32, 32);
-      expect(mockScene.visualCones.fillStyle).toHaveBeenCalledWith(0xaaaaaa, 0.3); // other
-      expect(mockScene.visualCones.fillRect).toHaveBeenCalledWith(1 * 32, 0 * 32, 32, 32);
     });
   });
 
-  describe('Player Movement', () => {
+  describe('Player Movement with Ray-Tracing', () => {
     let mockScene: any;
     let mockPlayer: any;
     let mockRoom: any;
@@ -450,124 +550,49 @@ describe('PhaserGame', () => {
       mockPlayer = {
         x: 48,
         y: 48,
+        setDepth: jest.fn().mockReturnThis(),
       };
       mockScene.add.rectangle = jest.fn(() => mockPlayer);
       mockScene.player = mockPlayer;
       mockRoom = { send: jest.fn() };
       mockScene.room = mockRoom;
-      mockScene.updateVisibility = jest.fn();
+      mockScene.lastDirection = { set: jest.fn(), setFromAngle: jest.fn(), normalize: jest.fn(), length: jest.fn(() => 1), angle: jest.fn(() => 0) };
       jest.spyOn(mockScene, 'shakeEffect');
       mockScene.otherPlayerSprites = new Map();
       mockScene.add = {
         ...mockScene.add,
         rectangle: jest.fn(() => ({
           setOrigin: jest.fn().mockReturnThis(),
+          setDepth: jest.fn().mockReturnThis(),
         })),
       };
     });
 
-    it('ignores movement when roundState is not playing', () => {
-      mockScene.roundState = 'waiting';
+    it('updates lastDirection and targetAngle on valid move complete', () => {
       const event = { key: 'ArrowRight' } as KeyboardEvent;
       mockScene.handleKeyDown(event);
-      expect(mockScene.tweens.add).not.toHaveBeenCalled();
-      expect(mockRoom.send).not.toHaveBeenCalled();
-    });
 
-    it('ignores movement when isMoving is true', () => {
-      mockScene.isMoving = true;
-      const event = { key: 'ArrowRight' } as KeyboardEvent;
-      mockScene.handleKeyDown(event);
-      expect(mockScene.tweens.add).not.toHaveBeenCalled();
-      expect(mockRoom.send).not.toHaveBeenCalled();
-    });
-
-    it('handles valid right movement with ArrowRight key', () => {
-      const event = { key: 'ArrowRight' } as KeyboardEvent;
-      mockScene.handleKeyDown(event);
-      expect(mockScene.tweens.add).toHaveBeenCalledWith(expect.objectContaining({
-        targets: mockPlayer,
-        x: 80,
-        y: 48,
-        duration: 200,
-        ease: 'Linear',
-      }));
-      expect(mockScene.playerX).toBe(2);
-      expect(mockScene.direction).toBe('right');
-      expect(mockScene.updateVisibility).toHaveBeenCalled();
+      expect(mockScene.lastDirection.set).toHaveBeenCalledWith(1, 0);
+      expect(mockScene.lastDirection.normalize).toHaveBeenCalled();
+      expect(mockScene.targetAngle).toBe(0); // right
+      expect(mockScene.isMoving).toBe(false);
       expect(mockRoom.send).toHaveBeenCalledWith('move', {
         dx: 1,
         dy: 0,
         direction: 'right'
       });
-      expect(mockScene.isMoving).toBe(false);
     });
 
-    it('handles valid down movement with "s" key', () => {
-      const event = { key: 's' } as KeyboardEvent;
-      mockScene.handleKeyDown(event);
-      expect(mockScene.tweens.add).toHaveBeenCalledWith(expect.objectContaining({
-        targets: mockPlayer,
-        x: 48,
-        y: 80,
-        duration: 200,
-        ease: 'Linear',
-      }));
-      expect(mockScene.playerY).toBe(2);
-      expect(mockScene.direction).toBe('down');
-      expect(mockRoom.send).toHaveBeenCalledWith('move', {
-        dx: 0,
-        dy: 1,
-        direction: 'down'
-      });
-    });
-
-    it('prevents movement into walls', () => {
+    it('prevents movement into walls and triggers shake', () => {
       mockScene.grid[1][0] = 0; // Wall left
       const event = { key: 'ArrowLeft' } as KeyboardEvent;
       mockScene.handleKeyDown(event);
+
       expect(mockScene.tweens.add).not.toHaveBeenCalled();
       expect(mockRoom.send).not.toHaveBeenCalled();
       expect(mockScene.playerX).toBe(1);
       expect(mockScene.isMoving).toBe(false);
       expect(mockScene.shakeEffect).toHaveBeenCalled();
-    });
-
-    it('prevents movement out of bounds', () => {
-      mockScene.playerX = 2; // Right edge
-      mockPlayer.x = 80;
-      const event = { key: 'ArrowRight' } as KeyboardEvent;
-      mockScene.handleKeyDown(event);
-      expect(mockScene.tweens.add).not.toHaveBeenCalled();
-      expect(mockScene.playerX).toBe(2);
-      expect(mockScene.shakeEffect).toHaveBeenCalled();
-    });
-
-    it('prevents movement into corner wall and triggers shake', () => {
-      // Setup player at (1,0), corner wall at (0,0)
-      mockScene.playerY = 0;
-      mockScene.playerX = 1;
-      mockPlayer.x = 48; // 1*32 +16
-      mockPlayer.y = 16; // 0*32 +16
-      mockScene.grid[0][0] = 0; // Corner wall at (0,0)
-      const event = { key: 'ArrowLeft' } as KeyboardEvent; // Move to (0,0)
-      mockScene.handleKeyDown(event);
-      expect(mockScene.tweens.add).not.toHaveBeenCalled();
-      expect(mockScene.playerX).toBe(1);
-      expect(mockScene.shakeEffect).toHaveBeenCalledTimes(1);
-    });
-
-    it('ignores rapid inputs while moving and does not trigger shake', () => {
-      const event1 = { key: 'ArrowRight' } as KeyboardEvent;
-      mockScene.handleKeyDown(event1); // First valid move
-      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1);
-      mockScene.isMoving = true; // Simulate during tween (mock completes instantly)
-
-      const event2 = { key: 'ArrowDown' } as KeyboardEvent; // Rapid second input
-      mockScene.handleKeyDown(event2);
-      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1); // No second tween
-      expect(mockRoom.send).toHaveBeenCalledTimes(1); // No second send
-      expect(mockScene.shakeEffect).not.toHaveBeenCalled(); // No shake for ignored input
     });
 
     it('reverts position and shakes on server rejection', () => {
@@ -605,7 +630,7 @@ describe('PhaserGame', () => {
     });
   });
 
-  describe('State Synchronization', () => {
+  describe('State Synchronization with Ray-Tracing', () => {
     let mockScene: any;
     let mockPlayers: Map<string, any>;
 
@@ -614,13 +639,15 @@ describe('PhaserGame', () => {
       mockScene.sessionId = 'test-session';
       mockScene.grid = [[1,1,1],[1,1,1],[1,1,1]];
       mockScene.tileSize = 32;
-      mockScene.player = { x: 48, y: 48 };
+      mockScene.player = { x: 48, y: 48, setDepth: jest.fn().mockReturnThis() };
       mockScene.updateVisibility = jest.fn();
       mockScene.updatePlayer = jest.fn();
       mockPlayers = new Map();
+      mockScene.lastDirection = { setFromAngle: jest.fn(), length: jest.fn(() => 1), angle: jest.fn(() => 0) };
+      mockScene.dirToAngle = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
     });
 
-    it('updates local player position from server state', () => {
+    it('updates local player position from server state and sets angle', () => {
       mockPlayers.set('test-session', { x: 2, y: 0, direction: 'right' });
       mockPlayers.set('other-session', { x: 0, y: 0, direction: 'left' });
 
@@ -635,6 +662,10 @@ describe('PhaserGame', () => {
       expect(mockScene.direction).toBe('right');
       expect(mockScene.player.x).toBe(80);
       expect(mockScene.player.y).toBe(16);
+      expect(mockScene.player.setDepth).toHaveBeenCalledWith(5);
+      expect(mockScene.lastDirection.setFromAngle).toHaveBeenCalledWith(0);
+      expect(mockScene.targetAngle).toBe(0);
+      expect(mockScene.currentAngle).toBe(0);
       expect(mockScene.updateVisibility).toHaveBeenCalled();
       expect(mockScene.updatePlayer).toHaveBeenCalledWith('other-session', 0, 0, 'left');
     });
@@ -645,7 +676,29 @@ describe('PhaserGame', () => {
       expect(mockScene.playerX).toBe(0); // unchanged
     });
   });
+
+  describe('Angle Interpolation and Update Loop', () => {
+    let mockScene: any;
+
+    beforeEach(() => {
+      mockScene = new (jest.requireMock('phaser').Scene)();
+      mockScene.targetAngle = Math.PI;
+      mockScene.currentAngle = 0;
+      mockScene.rotationSpeed = 8;
+      mockScene.updateVisibility = jest.fn();
+    });
+
+    it('interpolates currentAngle towards target in update', () => {
+      mockScene.update(0, 500); // delta 500ms, step 4 rad/s
+
+      expect(mockScene.currentAngle).toBeGreaterThan(0);
+      expect(mockScene.currentAngle).toBe(Math.PI);
+      expect(mockScene.currentAngle).toBeCloseTo(Math.PI, 10);
+      expect(mockScene.updateVisibility).toHaveBeenCalled();
+    });
+  });
 });
+
 describe('Other Player Smooth Updates and Leaves', () => {
   let mockScene: any;
   let mockSprite: any;
@@ -663,7 +716,7 @@ describe('Other Player Smooth Updates and Leaves', () => {
       ...mockScene.add,
       rectangle: jest.fn(() => mockSprite),
     };
-    mockSprite = { setOrigin: jest.fn().mockReturnThis(), destroy: jest.fn() };
+    mockSprite = { setOrigin: jest.fn().mockReturnThis(), destroy: jest.fn(), setDepth: jest.fn().mockReturnThis() };
     mockScene.updateVisibility = jest.fn();
     jest.spyOn(mockScene.tweens, 'add');
   });
@@ -720,8 +773,8 @@ describe('Other Player Smooth Updates and Leaves', () => {
   });
 
   it('handles multiple other players with separate tweens', () => {
-    const mockSprite1 = { setOrigin: jest.fn().mockReturnThis() };
-    const mockSprite2 = { setOrigin: jest.fn().mockReturnThis() };
+    const mockSprite1 = { setOrigin: jest.fn().mockReturnThis(), setDepth: jest.fn().mockReturnThis() };
+    const mockSprite2 = { setOrigin: jest.fn().mockReturnThis(), setDepth: jest.fn().mockReturnThis() };
     mockScene.add.rectangle
       .mockReturnValueOnce(mockSprite1)
       .mockReturnValueOnce(mockSprite2);

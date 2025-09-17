@@ -27,8 +27,6 @@ class MazeScene extends Phaser.Scene {
   tileSize = 32;
   moveSpeed = 200; // ms per move
   direction: string = 'down';
-  range: number = 4;
-  coneAngle: number = 60;
   fog: Phaser.GameObjects.Graphics | null = null;
   light: Phaser.GameObjects.Graphics | null = null;
   visualCones: Phaser.GameObjects.Graphics | null = null;
@@ -42,7 +40,20 @@ class MazeScene extends Phaser.Scene {
   sessionId: string = '';
   room: any = null;
   otherPlayers = new Map<string, OtherPlayer>();
-  visibleCache = new Map<string, {x: number, y: number}[]>();
+  // Ray-traced flashlight properties
+  walls: Phaser.Physics.Arcade.StaticGroup | null = null;
+  cover: Phaser.GameObjects.Graphics | null = null;
+  flashlightGraphics: Phaser.GameObjects.Graphics | null = null;
+  lastDirection = new Phaser.Math.Vector2(0, 1); // initial down
+  targetAngle = Math.PI / 2;
+  currentAngle = Math.PI / 2;
+  rotationSpeed = 8;
+  dirToAngle = {
+    right: 0,
+    down: Math.PI / 2,
+    left: Math.PI,
+    up: -Math.PI / 2
+  } as const;
 
   constructor() {
     super({ key: 'MazeScene' });
@@ -53,7 +64,6 @@ class MazeScene extends Phaser.Scene {
       this.sessionId = data.sessionId || '';
       this.room = data.room;
       this.otherPlayers = new Map();
-      this.visibleCache.clear();
     } catch (error) {
       console.error('MazeScene init error:', error);
     }
@@ -86,6 +96,46 @@ class MazeScene extends Phaser.Scene {
       } else {
         console.error('Keyboard input not available');
       }
+
+      // Floor setup
+      const floorGraphics = this.make.graphics();
+      floorGraphics.fillStyle(0x444444, 1);
+      floorGraphics.fillRect(0, 0, this.tileSize, this.tileSize);
+      floorGraphics.generateTexture('floor_tile', this.tileSize, this.tileSize);
+      floorGraphics.destroy();
+      this.add.tileSprite(0, 0, 672, 672, 'floor_tile')
+        .setOrigin(0, 0)
+        .setDepth(-1)
+        .setTint(0x888888);
+
+      // Physics walls group
+      this.walls = this.physics.add.staticGroup();
+
+      // Fog of war cover with mask
+      this.cover = this.add.graphics({ fillStyle: { color: 0x000000, alpha: 1.0 } });
+      this.cover.fillRect(0, 0, 672, 672);
+      this.cover.setDepth(1);
+
+      this.flashlightGraphics = this.add.graphics({ add: false });
+      const mask = this.flashlightGraphics.createGeometryMask();
+      this.cover.setMask(mask);
+      mask.invertAlpha = true;
+
+      // Visual cones overlay
+      if (!this.visualCones) {
+        this.visualCones = this.add.graphics().setDepth(3);
+      }
+
+      // Player depth
+      if (this.player) {
+        this.player.setDepth(5);
+      }
+
+      // Initial direction setup
+      this.lastDirection = new Phaser.Math.Vector2(0, 1);
+      this.lastDirection.normalize();
+      this.targetAngle = Math.PI / 2;
+      this.currentAngle = Math.PI / 2;
     } catch (error) {
       console.error('MazeScene create error:', error);
     }
@@ -148,31 +198,31 @@ class MazeScene extends Phaser.Scene {
       }
   
       if (gridChanged) {
-        this.visibleCache.clear(); // Invalidate cache on grid change
-  
-        // Destroy old tiles group
-        if (this.tilesGroup) {
-          this.tilesGroup.forEach((tile: Phaser.GameObjects.Graphics) => (tile as any).destroy(true));
-          this.tilesGroup = [];
+        // Clear old walls
+        if (this.walls) {
+          this.walls.clear(true, true);
         }
-  
-        // Re-render maze if grid ready
+
+        // Re-render walls only (floor is static)
         if (this.grid && this.grid.length > 0) {
-          this.tilesGroup = (this.add as any).group();
-          console.log('MazeScene: Created tilesGroup with', this.grid.length * this.grid[0].length, 'tiles');
+          console.log('MazeScene: Rendering', this.grid.length * this.grid[0].length, 'tiles');
           for (let y = 0; y < this.grid.length; y++) {
             for (let x = 0; x < this.grid[y].length; x++) {
-              const tile = this.add.graphics();
-              const value = this.grid[y][x];
-              if (value === 0) {
-                // Wall - gray for debugging visibility
-                tile.fillStyle(0x888888, 1);
-              } else {
-                // Path
-                tile.fillStyle(0xffffff, 1);
+              if (this.grid[y][x] === 0) {
+                // Wall graphic
+                const wallGraphic = this.add.graphics();
+                wallGraphic.fillStyle(0xaaaaaa, 1);
+                wallGraphic.fillRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
+                wallGraphic.setDepth(0);
+
+                // Physics body for ray casting
+                const wallBody = this.walls!.create(
+                  x * this.tileSize + this.tileSize / 2,
+                  y * this.tileSize + this.tileSize / 2
+                );
+                wallBody.body!.setSize(this.tileSize, this.tileSize);
+                wallBody.body!.immovable = true;
               }
-              tile.fillRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
-              this.tilesGroup.push(tile);
             }
           }
         }
@@ -188,22 +238,11 @@ class MazeScene extends Phaser.Scene {
           0x0000ff
         );
         this.player.setOrigin(0.5);
+        this.player.setDepth(5);
       } else {
         this.player.x = this.playerX * this.tileSize + this.tileSize / 2;
         this.player.y = this.playerY * this.tileSize + this.tileSize / 2;
-      }
-
-      // Recreate overlays if needed
-      if (!this.fog) {
-        this.fog = this.add.graphics().setDepth(1);
-        this.fog.fillStyle(0x000000, 1);
-        this.fog.fillRect(0, 0, this.scale.width, this.scale.height);
-      }
-      if (!this.light) {
-        this.light = this.add.graphics().setDepth(2);
-      }
-      if (!this.visualCones) {
-        this.visualCones = this.add.graphics().setDepth(3);
+        this.player.setDepth(5);
       }
 
       // Update visibility if grid ready
@@ -308,7 +347,13 @@ class MazeScene extends Phaser.Scene {
           this.playerX = newX;
           this.playerY = newY;
           this.direction = newDirection;
-          this.updateVisibility();
+          const dx = newX - oldX;
+          const dy = newY - oldY;
+          this.lastDirection.set(dx, dy);
+          if (this.lastDirection.length() > 0) {
+            this.lastDirection.normalize();
+          }
+          this.targetAngle = this.lastDirection.angle();
           this.isMoving = false;
           if (this.room) {
             console.log('Sending move to server:', { dx: newX - oldX, dy: newY - oldY, direction: newDirection });
@@ -318,6 +363,7 @@ class MazeScene extends Phaser.Scene {
               direction: newDirection
             });
           }
+          this.updateVisibility();
         }
       });
     } else {
@@ -363,6 +409,7 @@ class MazeScene extends Phaser.Scene {
             0x00ff00 // Green for other players
           );
           sprite.setOrigin(0.5);
+          sprite.setDepth(5);
           this.otherPlayerSprites.set(id, sprite);
         } else {
           // Existing player: tween to new position
@@ -383,94 +430,100 @@ class MazeScene extends Phaser.Scene {
     }
   }
 
-  private computeVisibleTilesFor(px: number, py: number, dir: string): {x: number, y: number}[] {
-    const cacheKey = `${px}-${py}-${dir}`;
-    if (this.visibleCache.has(cacheKey)) {
-      return this.visibleCache.get(cacheKey)!;
-    }
+  private computeVisibilityPolygon(posX: number, posY: number, angle: number): Phaser.Geom.Point[] {
+    if (!this.walls) return [];
 
-    const visibles: {x: number, y: number}[] = [];
-    const dirAngles: Record<string, number> = {
-      'left': Math.PI,
-      'right': 0,
-      'up': 3 * Math.PI / 2,
-      'down': Math.PI / 2,
-    };
-    const dirAngle = dirAngles[dir] || dirAngles['down'];
-    const halfAngleRad = (this.coneAngle / 2) * (Math.PI / 180);
+    const rayLength = 700;
+    const coneWidth = Phaser.Math.DegToRad(80);
+    const numRays = 80;
+    const startAngle = angle - coneWidth / 2;
+    const angleStep = coneWidth / numRays;
 
-    for (let dy = -this.range; dy <= this.range; dy++) {
-      for (let dx = -this.range; dx <= this.range; dx++) {
-        const nx = px + dx;
-        const ny = py + dy;
-        if (nx < 0 || nx >= this.grid[0].length || ny < 0 || ny >= this.grid.length) continue;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > this.range || dist === 0) continue;
-        let angle = Math.atan2(dy, dx);
-        if (angle < 0) angle += 2 * Math.PI;
-        let delta = Math.abs(angle - dirAngle);
-        if (delta > Math.PI) delta = 2 * Math.PI - delta;
-        if (delta <= halfAngleRad) {
-          visibles.push({x: nx, y: ny});
+    const wallChildren = this.walls.getChildren();
+    const intersectionPoints: Phaser.Geom.Point[] = [];
+
+    for (let i = 0; i <= numRays; i++) {
+      const rayAngle = startAngle + i * angleStep;
+      const endX = posX + rayLength * Math.cos(rayAngle);
+      const endY = posY + rayLength * Math.sin(rayAngle);
+      const ray = new Phaser.Geom.Line(posX, posY, endX, endY);
+
+      let closestIntersection: Phaser.Geom.Point | null = null;
+
+      wallChildren.forEach((wallObj: Phaser.GameObjects.Sprite) => {
+        const bounds = wallObj.getBounds(new Phaser.Geom.Rectangle());
+        const points = Phaser.Geom.Intersects.GetLineToRectangle(ray, bounds);
+
+        if (points.length > 0) {
+          points.forEach((p: Phaser.Geom.Point) => {
+            const playerPos = new Phaser.Math.Vector2(posX, posY);
+            const distToP = Phaser.Math.Distance.BetweenPoints(playerPos, p);
+            if (!closestIntersection || distToP < Phaser.Math.Distance.BetweenPoints(playerPos, closestIntersection)) {
+              closestIntersection = p;
+            }
+          });
         }
+      });
+
+      if (closestIntersection) {
+        intersectionPoints.push(closestIntersection);
+      } else {
+        intersectionPoints.push(new Phaser.Geom.Point(endX, endY));
       }
     }
-    // Always include player position
-    visibles.push({x: px, y: py});
-    this.visibleCache.set(cacheKey, visibles);
-    return visibles;
+
+    const polygonPoints: Phaser.Geom.Point[] = [new Phaser.Geom.Point(posX, posY)];
+    intersectionPoints.forEach((p) => {
+      polygonPoints.push(p);
+    });
+
+    return polygonPoints;
   }
 
   private updateVisibility() {
-    if (!this.light || !this.fog || this.grid.length === 0) return;
+    if (!this.flashlightGraphics || !this.visualCones || this.grid.length === 0 || !this.player || !this.walls) return;
     try {
-      const light = this.light;
-      const seen = new Set<string>();
-      const allVisibles: {x: number, y: number}[] = [];
-      const addVisible = (v: {x: number, y: number}) => {
-        const key = `${v.x},${v.y}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          allVisibles.push(v);
+      const ownPosX = this.player.x;
+      const ownPosY = this.player.y;
+      const ownPolygon = this.computeVisibilityPolygon(ownPosX, ownPosY, this.currentAngle);
+
+      this.flashlightGraphics.clear();
+      this.flashlightGraphics.fillStyle(0xffffff, 1);
+      if (ownPolygon.length > 2) {
+        this.flashlightGraphics.fillPoints(ownPolygon, true);
+      }
+
+      // Other players' polygons for union reveal
+      this.otherPlayers.forEach((other) => {
+        const otherPosX = other.x * this.tileSize + this.tileSize / 2;
+        const otherPosY = other.y * this.tileSize + this.tileSize / 2;
+        const otherAngle = this.dirToAngle[other.direction as keyof typeof this.dirToAngle];
+        const otherPolygon = this.computeVisibilityPolygon(otherPosX, otherPosY, otherAngle);
+        if (otherPolygon.length > 2) {
+          this.flashlightGraphics.fillPoints(otherPolygon, true);
         }
-      };
+      });
+
+      // Visual cones overlay
+      this.visualCones.clear();
 
       // Own cone
-      const ownVis = this.computeVisibleTilesFor(this.playerX, this.playerY, this.direction);
-      ownVis.forEach(addVisible);
-
-      // Other players' cones
-      this.otherPlayers.forEach((other: OtherPlayer) => {
-        const otherVis = this.computeVisibleTilesFor(other.x, other.y, other.direction);
-        otherVis.forEach(addVisible);
-      });
-
-      light.clear();
-      light.fillStyle(0xffffff, 1);
-      allVisibles.forEach(v => {
-        light.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
-      });
-
-      // Visual diff for cones
-      if (this.visualCones) {
-        const visualCones = this.visualCones;
-        visualCones.clear();
-
-        // Own cone full brightness tint
-        visualCones.fillStyle(0xffffff, 0.3);
-        ownVis.forEach(v => {
-          visualCones.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
-        });
-
-        // Other players' cones semi-transparent tint
-        this.otherPlayers.forEach((other: OtherPlayer) => {
-          const otherVis = this.computeVisibleTilesFor(other.x, other.y, other.direction);
-          visualCones.fillStyle(0xaaaaaa, 0.3);
-          otherVis.forEach(v => {
-            visualCones.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
-          });
-        });
+      this.visualCones.fillStyle(0xffffff, 0.3);
+      if (ownPolygon.length > 2) {
+        this.visualCones.fillPoints(ownPolygon, true);
       }
+
+      // Other players' cones tinted
+      this.otherPlayers.forEach((other) => {
+        const otherPosX = other.x * this.tileSize + this.tileSize / 2;
+        const otherPosY = other.y * this.tileSize + this.tileSize / 2;
+        const otherAngle = this.dirToAngle[other.direction as keyof typeof this.dirToAngle];
+        const otherPolygon = this.computeVisibilityPolygon(otherPosX, otherPosY, otherAngle);
+        this.visualCones.fillStyle(0x888888, 0.3);
+        if (otherPolygon.length > 2) {
+          this.visualCones.fillPoints(otherPolygon, true);
+        }
+      });
     } catch (error) {
       console.error('MazeScene updateVisibility error:', error);
     }
@@ -493,8 +546,13 @@ class MazeScene extends Phaser.Scene {
     console.log('Shake effect triggered for move rejection');
   }
 
-  update() {
-    // No continuous update needed for discrete movement
+  update(time: number, delta: number) {
+    this.currentAngle = Phaser.Math.Angle.RotateTo(
+      this.currentAngle,
+      this.targetAngle,
+      this.rotationSpeed * (delta / 1000)
+    );
+    this.updateVisibility();
   }
 }
 
@@ -521,6 +579,13 @@ const PhaserGame = ({ room, sessionId }: Props) => {
         height: 672,
         scene: [MazeScene],
         backgroundColor: '#000000',
+        physics: {
+          default: 'arcade',
+          arcade: {
+            gravity: { y: 0 },
+            debug: false
+          }
+        },
       };
 
       game = new Phaser.Game(config);

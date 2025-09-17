@@ -49,6 +49,9 @@ export class Player extends Schema {
 
   @type("number")
   startY: number = 0;
+
+  @type("string")
+  direction: string = 'down';
 }
 
 export class GameState extends Schema {

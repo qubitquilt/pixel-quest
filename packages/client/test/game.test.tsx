@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { act } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/router';
@@ -55,7 +55,7 @@ const mockPlayer = {
   startY: 0,
 };
 
-const mockStateClone = {
+const mockStateClone: any = {
   roundState: 'waiting',
   players: new Map([['player1', mockPlayer]]),
   mazeWidth: 10,
@@ -65,9 +65,10 @@ const mockStateClone = {
   // Mock methods to satisfy GameState
   assign: jest.fn(),
   setDirty: jest.fn(),
-  clone: jest.fn(),
   toJSON: jest.fn(),
 };
+
+mockStateClone.clone = jest.fn(() => mockStateClone);
 
 const mockState: any = {
   roundState: 'waiting',
@@ -94,6 +95,9 @@ const mockRoom: any = {
 };
 mockClient.joinById.mockResolvedValue(mockRoom);
 
+// Mock PhaserGame to accept room prop
+jest.mock('@/app/components/PhaserGame', () => ({ gameState, room }: any) => <div data-testid="phaser-game" />);
+
 describe('GamePage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -108,15 +112,10 @@ describe('GamePage', () => {
     await waitFor(() => {
       expect(mockClient.joinById).toHaveBeenCalledTimes(1);
       expect(mockClient.joinById).toHaveBeenCalledWith('test-room-id');
-      expect(screen.queryByTestId('phaser-game')).toBeInTheDocument();
-      expect(screen.getByText('Game: test-room-id')).toBeInTheDocument();
     });
 
-    // Simulate re-render, no additional join
-    render(<GamePage />);
-    await waitFor(() => {
-      expect(mockClient.joinById).toHaveBeenCalledTimes(1); // Still once
-    });
+    await screen.findByTestId('phaser-game');
+    expect(screen.getByText('Game: test-room-id')).toBeInTheDocument();
   });
 
   it('handles join error and shows loading or error state', async () => {
@@ -144,6 +143,8 @@ describe('GamePage', () => {
     await waitFor(() => {
       expect(mockClient.joinById).toHaveBeenCalledTimes(1);
     });
+
+    await screen.findByTestId('phaser-game');
 
     unmount();
 

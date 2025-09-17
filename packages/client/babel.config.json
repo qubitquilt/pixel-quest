@@ -5,14 +5,10 @@
     "@babel/preset-typescript"
   ],
   "plugins": [
-    "@babel/plugin-transform-typescript",
     ["@babel/plugin-transform-runtime", {
       "regenerator": true
     }],
-    "babel-plugin-transform-typescript-metadata",
-    ["@babel/plugin-proposal-decorators", { "legacy": true }],
-    "@babel/plugin-proposal-class-properties",
-    "@babel/plugin-transform-class-static-block",
+    "@babel/plugin-transform-class-properties",
     "@babel/plugin-transform-private-methods"
   ]
 }

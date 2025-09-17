@@ -3,10 +3,17 @@
 import { useEffect, useRef } from 'react';
 
 import * as Phaser from 'phaser';
+import { Player } from 'shared/types';
 
 interface Props {
   gameState: any;
   room?: any; // Colyseus room for sending movement
+}
+
+interface OtherPlayer {
+  x: number;
+  y: number;
+  direction: string;
 }
 
 class MazeScene extends Phaser.Scene {
@@ -23,6 +30,9 @@ class MazeScene extends Phaser.Scene {
   fog: Phaser.GameObjects.Graphics | null = null;
   light: Phaser.GameObjects.Graphics | null = null;
   isMoving = false;
+  sessionId: string = '';
+  room: any = null;
+  otherPlayers = new Map<string, OtherPlayer>();
 
   constructor() {
     super({ key: 'MazeScene' });
@@ -43,10 +53,9 @@ class MazeScene extends Phaser.Scene {
     this.playerX = data.playerX || 1; // Start at (1,1) assuming open path
     this.playerY = data.playerY || 1;
     this.direction = data.direction || 'down';
-    this.roundState = data.roundState || 'waiting';
-    this.playerX = data.playerX || 1; // Start at (1,1) assuming open path
-    this.playerY = data.playerY || 1;
-    this.direction = data.direction || 'down';
+    this.sessionId = data.sessionId;
+    this.room = data.room;
+    this.otherPlayers = new Map();
   }
 
   preload() {
@@ -133,6 +142,9 @@ class MazeScene extends Phaser.Scene {
         return;
     }
 
+    const oldX = this.playerX;
+    const oldY = this.playerY;
+
     // Check bounds and collision (1 = path)
     if (
       newX >= 0 &&
@@ -158,6 +170,13 @@ class MazeScene extends Phaser.Scene {
           this.direction = newDirection;
           this.updateVisibility();
           this.isMoving = false;
+          if (this.room) {
+            this.room.send('move', {
+              dx: newX - oldX,
+              dy: newY - oldY,
+              direction: newDirection
+            });
+          }
         }
       });
     }
@@ -173,17 +192,29 @@ class MazeScene extends Phaser.Scene {
     this.updateVisibility();
   }
 
-  private computeVisibleTiles(): {x: number, y: number}[] {
+  updatePlayer(id: string, x: number, y: number, direction: string) {
+    if (id === this.sessionId) {
+      // Update self
+      this.playerX = x;
+      this.playerY = y;
+      this.direction = direction;
+      this.updatePlayerPosition(x, y);
+    } else {
+      // Update other player
+      this.otherPlayers.set(id, { x, y, direction });
+      this.updateVisibility();
+    }
+  }
+
+  private computeVisibleTilesFor(px: number, py: number, dir: string): {x: number, y: number}[] {
     const visibles: {x: number, y: number}[] = [];
-    const px = this.playerX;
-    const py = this.playerY;
     const dirAngles: Record<string, number> = {
       'left': Math.PI,
       'right': 0,
       'up': 3 * Math.PI / 2,
       'down': Math.PI / 2,
     };
-    const dirAngle = dirAngles[this.direction];
+    const dirAngle = dirAngles[dir] || dirAngles['down'];
     const halfAngleRad = (this.coneAngle / 2) * (Math.PI / 180);
 
     for (let dy = -this.range; dy <= this.range; dy++) {
@@ -210,10 +241,29 @@ class MazeScene extends Phaser.Scene {
   private updateVisibility() {
     if (!this.light || !this.fog) return;
     const light = this.light;
-    const visibles = this.computeVisibleTiles();
+    const seen = new Set<string>();
+    const allVisibles: {x: number, y: number}[] = [];
+    const addVisible = (v: {x: number, y: number}) => {
+      const key = `${v.x},${v.y}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        allVisibles.push(v);
+      }
+    };
+
+    // Own cone
+    const ownVis = this.computeVisibleTilesFor(this.playerX, this.playerY, this.direction);
+    ownVis.forEach(addVisible);
+
+    // Other players' cones
+    this.otherPlayers.forEach((other: OtherPlayer) => {
+      const otherVis = this.computeVisibleTilesFor(other.x, other.y, other.direction);
+      otherVis.forEach(addVisible);
+    });
+
     light.clear();
     light.fillStyle(0xffffff, 1);
-    visibles.forEach(v => {
+    allVisibles.forEach(v => {
       light.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
     });
   }
@@ -249,6 +299,8 @@ const PhaserGame = ({ gameState, room }: Props) => {
       roundState: gameState?.roundState || 'waiting',
       playerX: gameState?.players?.get(gameState?.sessionId)?.x || 1,
       playerY: gameState?.players?.get(gameState?.sessionId)?.y || 1,
+      sessionId: gameState?.sessionId,
+      room: room,
     });
 
     // Store scene reference
@@ -267,15 +319,21 @@ const PhaserGame = ({ gameState, room }: Props) => {
     const handleStateChange = (changes: any[]) => {
       changes.forEach(change => {
         if (change.field === 'players') {
-          const player = room.state.players.get(gameState.sessionId);
-          if (player && sceneRef.current) {
-            sceneRef.current.updatePlayerPosition(player.x, player.y);
-          }
+          room.state.players.forEach((player: Player, id: string) => {
+            sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
+          });
         }
       });
     };
 
     room.state.onChange = handleStateChange;
+
+    // Initial update
+    if (sceneRef.current) {
+      room.state.players.forEach((player: Player, id: string) => {
+        sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
+      });
+    }
 
     return () => {
       room.state.onChange = null;

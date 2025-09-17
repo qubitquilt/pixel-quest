@@ -322,6 +322,7 @@ class MazeScene extends Phaser.Scene {
       });
     } else {
       console.log('Invalid move: out of bounds or wall');
+      this.shakeEffect();
     }
   }
 

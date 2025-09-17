@@ -456,6 +456,49 @@ describe("MazeRaceRoom", () => {
       expect(state.players.get('guest-session')!.x).toBe(initialX);
       expect(state.players.get('guest-session')!.y).toBe(initialY);
     });
+
+    it('handles concurrent invalid moves (wall collisions) without updates', () => {
+      const state = room.state as any;
+      const hostInitialX = state.players.get('host-session')!.x;
+      const hostInitialY = state.players.get('host-session')!.y;
+      const guestInitialX = state.players.get('guest-session')!.x;
+      const guestInitialY = state.players.get('guest-session')!.y;
+
+      // Mock walls for both players
+      state.grid[hostInitialY * 21 + (hostInitialX + 1)] = 0; // Host right wall
+      state.grid[guestInitialY * 21 + (guestInitialX - 1)] = 0; // Guest left wall
+
+      // Concurrent invalid moves
+      (room as any).handleMove(hostClient, { dx: 1, dy: 0 });
+      (room as any).handleMove(guestClient, { dx: -1, dy: 0 });
+
+      // Both positions unchanged, no race condition issues
+      expect(state.players.get('host-session')!.x).toBe(hostInitialX);
+      expect(state.players.get('host-session')!.y).toBe(hostInitialY);
+      expect(state.players.get('guest-session')!.x).toBe(guestInitialX);
+      expect(state.players.get('guest-session')!.y).toBe(guestInitialY);
+    });
+
+    it('rejects corner out-of-bounds moves without updates', () => {
+      const state = room.state as any;
+      const initialX = state.players.get('guest-session')!.x;
+      const initialY = state.players.get('guest-session')!.y;
+
+      // Move from corner (1,0) left to x=0 (assume open but test bounds to -1), but for out-of-bounds: move up to y=-1
+      // Adjust to test corner bounds: move up from y=0
+      (room as any).handleMove(guestClient, { dx: 0, dy: -1 });
+
+      // Position unchanged (out of bounds)
+      expect(state.players.get('guest-session')!.x).toBe(initialX);
+      expect(state.players.get('guest-session')!.y).toBe(initialY);
+
+      // Also test right from x=20 to 21 if moved, but since start at 1,0, test left to 0 if wall or bounds
+      // For corner wall: assume move left to (0,0) wall
+      state.grid[0 * 21 + 0] = 0; // Corner (0,0) wall
+      (room as any).handleMove(guestClient, { dx: -1, dy: 0 });
+      expect(state.players.get('guest-session')!.x).toBe(initialX);
+      expect(state.players.get('guest-session')!.y).toBe(initialY);
+    });
   });
 });
     describe('Maze State Synchronization', () => {

@@ -128,7 +128,7 @@ jest.mock('phaser', () => ({
   
       const inBounds = newX >= 0 && newX < this.grid[0].length && newY >= 0 && newY < this.grid.length;
       const isPath = inBounds ? this.grid[newY][newX] === 1 : false;
-  
+
       if (inBounds && isPath) {
         // Track for potential server rejection (mirror real code)
         this.pendingExpectedX = newX;
@@ -162,6 +162,8 @@ jest.mock('phaser', () => ({
             }
           }
         });
+      } else {
+        this.shakeEffect();
       }
     }
   
@@ -454,7 +456,7 @@ describe('PhaserGame', () => {
       mockRoom = { send: jest.fn() };
       mockScene.room = mockRoom;
       mockScene.updateVisibility = jest.fn();
-      mockScene.shakeEffect = jest.fn();
+      jest.spyOn(mockScene, 'shakeEffect');
       mockScene.otherPlayerSprites = new Map();
       mockScene.add = {
         ...mockScene.add,
@@ -528,6 +530,7 @@ describe('PhaserGame', () => {
       expect(mockRoom.send).not.toHaveBeenCalled();
       expect(mockScene.playerX).toBe(1);
       expect(mockScene.isMoving).toBe(false);
+      expect(mockScene.shakeEffect).toHaveBeenCalled();
     });
 
     it('prevents movement out of bounds', () => {
@@ -537,6 +540,34 @@ describe('PhaserGame', () => {
       mockScene.handleKeyDown(event);
       expect(mockScene.tweens.add).not.toHaveBeenCalled();
       expect(mockScene.playerX).toBe(2);
+      expect(mockScene.shakeEffect).toHaveBeenCalled();
+    });
+
+    it('prevents movement into corner wall and triggers shake', () => {
+      // Setup player at (1,0), corner wall at (0,0)
+      mockScene.playerY = 0;
+      mockScene.playerX = 1;
+      mockPlayer.x = 48; // 1*32 +16
+      mockPlayer.y = 16; // 0*32 +16
+      mockScene.grid[0][0] = 0; // Corner wall at (0,0)
+      const event = { key: 'ArrowLeft' } as KeyboardEvent; // Move to (0,0)
+      mockScene.handleKeyDown(event);
+      expect(mockScene.tweens.add).not.toHaveBeenCalled();
+      expect(mockScene.playerX).toBe(1);
+      expect(mockScene.shakeEffect).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores rapid inputs while moving and does not trigger shake', () => {
+      const event1 = { key: 'ArrowRight' } as KeyboardEvent;
+      mockScene.handleKeyDown(event1); // First valid move
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1);
+      mockScene.isMoving = true; // Simulate during tween (mock completes instantly)
+
+      const event2 = { key: 'ArrowDown' } as KeyboardEvent; // Rapid second input
+      mockScene.handleKeyDown(event2);
+      expect(mockScene.tweens.add).toHaveBeenCalledTimes(1); // No second tween
+      expect(mockRoom.send).toHaveBeenCalledTimes(1); // No second send
+      expect(mockScene.shakeEffect).not.toHaveBeenCalled(); // No shake for ignored input
     });
 
     it('reverts position and shakes on server rejection', () => {

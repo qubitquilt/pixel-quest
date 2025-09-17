@@ -360,7 +360,7 @@ describe("MazeRaceRoom", () => {
 
       // Valid move: right to open path (ensure grid[0][2] is path for test)
       room.state.grid[0 * 21 + 2] = 1; // Mock open path for deterministic test
-      room.onMove(guestClient, { dx: 1, dy: 0 });
+      (room as any).handleMove(guestClient, { dx: 1, dy: 0 });
 
       // Assert updated position
       expect(state.players.get('guest-session')!.x).toBe(initialX + 1);
@@ -378,7 +378,7 @@ describe("MazeRaceRoom", () => {
       // Mock grid for test (since random, but validation uses grid)
       state.grid[initialY * 21 + (initialX + 1)] = 0; // Set wall
 
-      room.onMove(guestClient, { dx: 1, dy: 0 });
+      (room as any).handleMove(guestClient, { dx: 1, dy: 0 });
 
       // Position unchanged
       expect(state.players.get('guest-session')!.x).toBe(initialX);
@@ -391,14 +391,70 @@ describe("MazeRaceRoom", () => {
       // Multiple moves (mock open paths for deterministic test)
       room.state.grid[1 * 21 + 1] = 1; // Down for guest
       room.state.grid[0 * 21 + 2] = 1; // Right for host
-      room.onMove(guestClient, { dx: 0, dy: 1 });
-      room.onMove(hostClient, { dx: 1, dy: 0 });
+      (room as any).handleMove(guestClient, { dx: 0, dy: 1 });
+      (room as any).handleMove(hostClient, { dx: 1, dy: 0 });
 
       // Assert both players updated (assume valid)
       expect(state.players.get('guest-session')!.y).toBeGreaterThan(0);
       expect(state.players.get('host-session')!.x).toBeGreaterThan(0);
 
       // State broadcast for both
+    });
+
+    it('should reject out-of-bounds moves', () => {
+      const state = room.state as any;
+      const initialX = state.players.get('guest-session')!.x;
+      const initialY = state.players.get('guest-session')!.y;
+
+      // Out of bounds: left to negative X
+      (room as any).handleMove(guestClient, { dx: -2, dy: 0 });
+
+      // Position unchanged
+      expect(state.players.get('guest-session')!.x).toBe(initialX);
+      expect(state.players.get('guest-session')!.y).toBe(initialY);
+    });
+
+    it('should update player direction on valid move', () => {
+      const state = room.state as any;
+      const initialDirection = state.players.get('guest-session')!.direction;
+
+      // Valid move right with new direction
+      room.state.grid[0 * 21 + 2] = 1; // Mock open path
+      (room as any).handleMove(guestClient, { dx: 1, dy: 0, direction: 'right' });
+
+      // Assert position and direction updated
+      expect(state.players.get('guest-session')!.x).toBeGreaterThan(0);
+      expect(state.players.get('guest-session')!.direction).toBe('right');
+      expect(state.players.get('guest-session')!.direction).not.toBe(initialDirection);
+    });
+
+    it('should handle mixed concurrent moves (valid and invalid)', () => {
+      const state = room.state as any;
+
+      // Valid for host, invalid for guest (wall)
+      room.state.grid[0 * 21 + 2] = 1; // Right for host valid
+      room.state.grid[1 * 21 + 1] = 0; // Down for guest invalid (wall)
+
+      (room as any).handleMove(guestClient, { dx: 0, dy: 1 }); // Invalid
+      (room as any).handleMove(hostClient, { dx: 1, dy: 0 }); // Valid
+
+      // Assert only host updated, guest unchanged
+      expect(state.players.get('host-session')!.x).toBeGreaterThan(0);
+      expect(state.players.get('guest-session')!.y).toBe(0); // Unchanged
+    });
+
+    it('should silently reject invalid moves without state change', () => {
+      const state = room.state as any;
+      const initialX = state.players.get('guest-session')!.x;
+      const initialY = state.players.get('guest-session')!.y;
+
+      // Invalid wall move
+      state.grid[initialY * 21 + (initialX + 1)] = 0;
+      (room as any).handleMove(guestClient, { dx: 1, dy: 0 });
+
+      // No state change, thus no broadcast triggered
+      expect(state.players.get('guest-session')!.x).toBe(initialX);
+      expect(state.players.get('guest-session')!.y).toBe(initialY);
     });
   });
 });

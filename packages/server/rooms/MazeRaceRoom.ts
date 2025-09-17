@@ -14,26 +14,32 @@ export class MazeRaceRoom extends Room<GameState> {
   
     this.onMessage('startGame', this.onStartGame.bind(this));
 
-    this.onMessage('move', (client: Client, message: any) => {
-      const { dx, dy, direction } = message;
-      const player = this.state.players.get(client.sessionId);
-      if (player && dx !== undefined && dy !== undefined) {
-        const newX = player.x + dx;
-        const newY = player.y + dy;
-        // Validate bounds
-        if (newX >= 0 && newX < this.state.mazeWidth && newY >= 0 && newY < this.state.mazeHeight) {
-          // Validate against grid (1 = path) - flat indexing
-          if (this.state.grid.length === 0 || this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
-            player.x = newX;
-            player.y = newY;
-            if (direction) {
-              player.direction = direction;
-            }
+    this.onMessage('move', (client: Client, message: any) => this.handleMove(client, message));
+  }
+
+  private handleMove(client: Client, message: any): void {
+    const { dx, dy, direction } = message;
+    const player = this.state.players.get(client.sessionId);
+    if (player && dx !== undefined && dy !== undefined) {
+      const newX = player.x + dx;
+      const newY = player.y + dy;
+      // Validate bounds
+      if (newX >= 0 && newX < this.state.mazeWidth && newY >= 0 && newY < this.state.mazeHeight) {
+        // Validate against grid (1 = path) - flat indexing
+        if (this.state.grid.length === 0 || this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
+          player.x = newX;
+          player.y = newY;
+          if (direction) {
+            player.direction = direction;
           }
+        } else if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+          console.warn(`Invalid move for ${client.sessionId}: wall at (${newX}, ${newY})`);
         }
-        // State change broadcasts automatically via Colyseus
+      } else if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
+        console.warn(`Invalid move for ${client.sessionId}: out of bounds (${newX}, ${newY})`);
       }
-    });
+    }
+    // State change broadcasts automatically via Colyseus
   }
 
   onJoin(client: Client, options: any) {
@@ -104,24 +110,6 @@ export class MazeRaceRoom extends Room<GameState> {
         console.log(`Start game rejected: isHost=${isHost}, players=${this.state.players.size}`);
       }
     }
-  }
-
-  onMove(client: Client, message: any) {
-    const { dx, dy } = message;
-    const player = this.state.players.get(client.sessionId);
-    if (player && dx !== undefined && dy !== undefined) {
-      const newX = player.x + dx;
-      const newY = player.y + dy;
-      // Validate bounds
-      if (newX >= 0 && newX < this.state.mazeWidth && newY >= 0 && newY < this.state.mazeHeight) {
-        // Validate against grid (1 = path) - flat indexing
-        if (this.state.grid.length === 0 || this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
-          player.x = newX;
-          player.y = newY;
-        }
-      }
-    }
-    // State change broadcasts automatically via Colyseus
   }
 
   private generateMaze(): Maze {

@@ -236,6 +236,9 @@ importers:
       '@colyseus/schema':
         specifier: ^3.0.60
         version: 3.0.60
+      '@colyseus/ws-transport':
+        specifier: ^0.16.5
+        version: 0.16.5(@colyseus/core@0.16.21(@colyseus/schema@3.0.60)(@pm2/io@6.1.0))
       colyseus:
         specifier: ^0.16.4
         version: 0.16.4(@colyseus/auth@0.16.6(@colyseus/core@0.16.21(@colyseus/schema@3.0.60)(@pm2/io@6.1.0))(express@5.1.0))(@colyseus/core@0.16.21(@colyseus/schema@3.0.60)(@pm2/io@6.1.0))(@colyseus/redis-driver@0.16.1(@colyseus/schema@3.0.60)(@pm2/io@6.1.0))(@colyseus/redis-presence@0.16.4(@colyseus/schema@3.0.60)(@pm2/io@6.1.0))(@colyseus/schema@3.0.60)(@colyseus/uwebsockets-transport@0.16.9(@colyseus/core@0.16.21(@colyseus/schema@3.0.60)(@pm2/io@6.1.0)))(@colyseus/ws-transport@0.16.5(@colyseus/core@0.16.21(@colyseus/schema@3.0.60)(@pm2/io@6.1.0)))

@@ -12,13 +12,14 @@
     "lint": "eslint . --ext .ts"
   },
   "devDependencies": {
+    "@colyseus/testing": "^0.16.3",
     "@types/express": "^5.0.3",
-    "@types/ws": "^8.5.10",
     "@types/node": "^20.17.9",
-    "@colyseus/testing": "^0.16.3"
+    "@types/ws": "^8.5.10"
   },
   "dependencies": {
     "@colyseus/schema": "^3.0.60",
+    "@colyseus/ws-transport": "^0.16.5",
     "colyseus": "^0.16.4",
     "express": "^5.1.0",
     "reflect-metadata": "^0.2.2",

@@ -15,7 +15,7 @@ export class MazeRaceRoom extends Room<GameState> {
     this.onMessage('startGame', this.onStartGame.bind(this));
 
     this.onMessage('move', (client: Client, message: any) => {
-      const { dx, dy } = message;
+      const { dx, dy, direction } = message;
       const player = this.state.players.get(client.sessionId);
       if (player && dx !== undefined && dy !== undefined) {
         const newX = player.x + dx;
@@ -23,9 +23,12 @@ export class MazeRaceRoom extends Room<GameState> {
         // Validate bounds
         if (newX >= 0 && newX < this.state.mazeWidth && newY >= 0 && newY < this.state.mazeHeight) {
           // Validate against grid (1 = path) - flat indexing
-          if (this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
+          if (this.state.grid.length === 0 || this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
             player.x = newX;
             player.y = newY;
+            if (direction) {
+              player.direction = direction;
+            }
           }
         }
         // State change broadcasts automatically via Colyseus
@@ -112,7 +115,7 @@ export class MazeRaceRoom extends Room<GameState> {
       // Validate bounds
       if (newX >= 0 && newX < this.state.mazeWidth && newY >= 0 && newY < this.state.mazeHeight) {
         // Validate against grid (1 = path) - flat indexing
-        if (this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
+        if (this.state.grid.length === 0 || this.state.grid[newY * this.state.mazeWidth + newX] === 1) {
           player.x = newX;
           player.y = newY;
         }

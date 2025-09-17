@@ -15,15 +15,24 @@ const GamePage = () => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [room, setRoom] = useState<Room<GameState> | null>(null);
   const [joined, setJoined] = useState(false);
+  const [localSessionId, setLocalSessionId] = useState<string>('');
 
   const joinGame = useCallback(async () => {
     if (!roomId || joined) return;
     try {
-      const joinedRoom = await client.joinById(roomId as string);
-      const typedRoom = joinedRoom as Room<GameState>;
-      setRoom(typedRoom);
-      setGameState(typedRoom.state.clone());
-      typedRoom.onStateChange((state) => {
+      let joinedRoom: Room<GameState>;
+      if ((window as any).room && (window as any).room.roomId === roomId) {
+        joinedRoom = (window as any).room as Room<GameState>;
+        console.log('Using existing room from window');
+      } else {
+        const newRoom = await client.joinById(roomId as string);
+        joinedRoom = newRoom as Room<GameState>;
+        console.log('Joined new room');
+      }
+      setRoom(joinedRoom);
+      const localSessionId = joinedRoom.sessionId;
+      setGameState(joinedRoom.state.clone());
+      joinedRoom.onStateChange((state) => {
         setGameState(state.clone());
       });
       setJoined(true);
@@ -49,7 +58,7 @@ const GamePage = () => {
   return (
     <div className="p-4">
       <h1>Game: {roomId}</h1>
-      <PhaserGame gameState={gameState} />
+      <PhaserGame gameState={gameState} room={room} sessionId={localSessionId} />
     </div>
   );
 };

@@ -8,6 +8,7 @@ import { Player } from 'shared/types';
 interface Props {
   gameState: any;
   room?: any; // Colyseus room for sending movement
+  sessionId?: string;
 }
 
 interface OtherPlayer {
@@ -19,6 +20,8 @@ interface OtherPlayer {
 class MazeScene extends Phaser.Scene {
   grid: number[][] = [];
   player: Phaser.GameObjects.Rectangle | null = null;
+  otherPlayerSprites = new Map<string, Phaser.GameObjects.Rectangle>();
+  tilesGroup: Phaser.GameObjects.Group | null = null;
   roundState: string = 'waiting';
   playerX = 0;
   playerY = 0;
@@ -29,33 +32,26 @@ class MazeScene extends Phaser.Scene {
   coneAngle: number = 60;
   fog: Phaser.GameObjects.Graphics | null = null;
   light: Phaser.GameObjects.Graphics | null = null;
+  visualCones: Phaser.GameObjects.Graphics | null = null;
   isMoving = false;
   sessionId: string = '';
   room: any = null;
   otherPlayers = new Map<string, OtherPlayer>();
+  visibleCache = new Map<string, {x: number, y: number}[]>();
 
   constructor() {
     super({ key: 'MazeScene' });
   }
 
   init(data: any) {
-    // Reshape flat grid to 2D if it's a flat array (from Colyseus serialization)
-    let reshapedGrid = data.grid || [];
-    if (Array.isArray(reshapedGrid) && reshapedGrid.length === 441) {
-      const width = 21;
-      this.grid = Array.from({ length: width }, (_, y) =>
-        Array.from({ length: width }, (_, x) => reshapedGrid[y * width + x])
-      );
-    } else {
-      this.grid = reshapedGrid;
+    try {
+      this.sessionId = data.sessionId || '';
+      this.room = data.room;
+      this.otherPlayers = new Map();
+      this.visibleCache.clear();
+    } catch (error) {
+      console.error('MazeScene init error:', error);
     }
-    this.roundState = data.roundState || 'waiting';
-    this.playerX = data.playerX || 1; // Start at (1,1) assuming open path
-    this.playerY = data.playerY || 1;
-    this.direction = data.direction || 'down';
-    this.sessionId = data.sessionId;
-    this.room = data.room;
-    this.otherPlayers = new Map();
   }
 
   preload() {
@@ -63,47 +59,132 @@ class MazeScene extends Phaser.Scene {
   }
 
   create() {
-    if (!this.grid || this.grid.length === 0) return;
-
-    // Render maze from grid data
-    for (let y = 0; y < this.grid.length; y++) {
-      for (let x = 0; x < this.grid[y].length; x++) {
-        const tile = this.add.graphics();
-        const value = this.grid[y][x];
-        if (value === 0) {
-          // Wall
-          tile.fillStyle(0x000000, 1);
-        } else {
-          // Path
-          tile.fillStyle(0xffffff, 1);
-        }
-        tile.fillRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
+    // Initial setup without grid; full render deferred to updateGameState
+    try {
+      // Add player sprite at starting position (placeholder)
+      if (!this.player) {
+        this.player = this.add.rectangle(
+          this.tileSize + this.tileSize / 2,
+          this.tileSize + this.tileSize / 2,
+          28,
+          28,
+          0x0000ff
+        );
+        this.player.setOrigin(0.5);
       }
+
+      // Setup keyboard input for local movement
+      (this.input.keyboard as any)?.on('keydown', this.handleKeyDown, this);
+    } catch (error) {
+      console.error('MazeScene create error:', error);
     }
+  }
 
-    // Add player sprite at starting position
-    this.player = this.add.rectangle(
-      this.playerX * this.tileSize + this.tileSize / 2,
-      this.playerY * this.tileSize + this.tileSize / 2,
-      28,
-      28,
-      0x0000ff
-    );
-    this.player.setOrigin(0.5);
+  updateGameState(data: any) {
+    try {
+      if (!data) return;
 
-    // Fog of war overlay
-    this.fog = this.add.graphics().setDepth(1);
-    this.fog.fillStyle(0x000000, 1);
-    this.fog.fillRect(0, 0, this.scale.width, this.scale.height);
+      const newGrid = data.grid || [];
+      const gridChanged = !arraysEqual(this.grid.flat(), newGrid);
 
-    // Light mask for visibility
-    this.light = this.add.graphics().setDepth(2);
+      // Reshape flat grid to 2D if it's a flat array (from Colyseus serialization)
+      if (Array.isArray(newGrid) && newGrid.length === 441) {
+        const width = 21;
+        this.grid = Array.from({ length: width }, (_, y) =>
+          Array.from({ length: width }, (_, x) => newGrid[y * width + x])
+        );
+      } else {
+        this.grid = newGrid.length ? newGrid : this.grid;
+      }
 
-    // Initial visibility
-    this.updateVisibility();
+      this.roundState = data.roundState || this.roundState;
+      this.playerX = data.players?.get(this.sessionId)?.x || this.playerX || 1;
+      this.playerY = data.players?.get(this.sessionId)?.y || this.playerY || 1;
+      this.direction = data.players?.get(this.sessionId)?.direction || this.direction || 'down';
 
-    // Setup keyboard input for local movement
-    (this.input.keyboard as any)?.on('keydown', this.handleKeyDown, this);
+      if (gridChanged) {
+        this.visibleCache.clear(); // Invalidate cache on grid change
+
+        // Destroy old tiles group
+        if (this.tilesGroup) {
+          this.tilesGroup.destroy(true, true);
+          this.tilesGroup = null;
+        }
+
+        // Re-render maze if grid ready
+        if (this.grid && this.grid.length > 0) {
+          this.tilesGroup = this.add.group();
+          for (let y = 0; y < this.grid.length; y++) {
+            for (let x = 0; x < this.grid[y].length; x++) {
+              const tile = this.add.graphics();
+              const value = this.grid[y][x];
+              if (value === 0) {
+                // Wall
+                tile.fillStyle(0x000000, 1);
+              } else {
+                // Path
+                tile.fillStyle(0xffffff, 1);
+              }
+              tile.fillRect(x * this.tileSize, y * this.tileSize, this.tileSize, this.tileSize);
+              this.tilesGroup.add(tile);
+            }
+          }
+        }
+      }
+
+      // Recreate player if not exists or reposition
+      if (!this.player) {
+        this.player = this.add.rectangle(
+          this.playerX * this.tileSize + this.tileSize / 2,
+          this.playerY * this.tileSize + this.tileSize / 2,
+          28,
+          28,
+          0x0000ff
+        );
+        this.player.setOrigin(0.5);
+      } else {
+        this.player.x = this.playerX * this.tileSize + this.tileSize / 2;
+        this.player.y = this.playerY * this.tileSize + this.tileSize / 2;
+      }
+
+      // Recreate overlays if needed
+      if (!this.fog) {
+        this.fog = this.add.graphics().setDepth(1);
+        this.fog.fillStyle(0x000000, 1);
+        this.fog.fillRect(0, 0, this.scale.width, this.scale.height);
+      }
+      if (!this.light) {
+        this.light = this.add.graphics().setDepth(2);
+      }
+      if (!this.visualCones) {
+        this.visualCones = this.add.graphics().setDepth(3);
+      }
+
+      // Update visibility if grid ready
+      if (this.grid.length > 0) {
+        this.updateVisibility();
+      }
+
+      // Update other players from data if provided
+      if (data.players) {
+        data.players.forEach((player: Player, id: string) => {
+          if (id !== this.sessionId) {
+            this.otherPlayers.set(id, { x: player.x, y: player.y, direction: player.direction || 'down' });
+            this.updatePlayer(id, player.x, player.y, player.direction || 'down');
+          }
+        });
+      }
+    } catch (error) {
+      console.error('MazeScene updateGameState error:', error);
+    }
+  }
+
+  private arraysEqual(a: any[], b: any[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
   }
 
   private handleKeyDown(event: KeyboardEvent) {
@@ -193,20 +274,47 @@ class MazeScene extends Phaser.Scene {
   }
 
   updatePlayer(id: string, x: number, y: number, direction: string) {
-    if (id === this.sessionId) {
-      // Update self
-      this.playerX = x;
-      this.playerY = y;
-      this.direction = direction;
-      this.updatePlayerPosition(x, y);
-    } else {
-      // Update other player
-      this.otherPlayers.set(id, { x, y, direction });
-      this.updateVisibility();
+    try {
+      if (id === this.sessionId) {
+        // Update self
+        this.playerX = x;
+        this.playerY = y;
+        this.direction = direction;
+        this.updatePlayerPosition(x, y);
+      } else {
+        // Update other player state
+        this.otherPlayers.set(id, { x, y, direction });
+
+        // Destroy old sprite if exists
+        const oldSprite = this.otherPlayerSprites.get(id);
+        if (oldSprite) {
+          oldSprite.destroy();
+        }
+
+        // Create new sprite
+        const sprite = this.add.rectangle(
+          x * this.tileSize + this.tileSize / 2,
+          y * this.tileSize + this.tileSize / 2,
+          28,
+          28,
+          0x00ff00 // Green for other players
+        );
+        sprite.setOrigin(0.5);
+        this.otherPlayerSprites.set(id, sprite);
+
+        this.updateVisibility();
+      }
+    } catch (error) {
+      console.error(`MazeScene updatePlayer error for ${id}:`, error);
     }
   }
 
   private computeVisibleTilesFor(px: number, py: number, dir: string): {x: number, y: number}[] {
+    const cacheKey = `${px}-${py}-${dir}`;
+    if (this.visibleCache.has(cacheKey)) {
+      return this.visibleCache.get(cacheKey)!;
+    }
+
     const visibles: {x: number, y: number}[] = [];
     const dirAngles: Record<string, number> = {
       'left': Math.PI,
@@ -235,37 +343,63 @@ class MazeScene extends Phaser.Scene {
     }
     // Always include player position
     visibles.push({x: px, y: py});
+    this.visibleCache.set(cacheKey, visibles);
     return visibles;
   }
 
   private updateVisibility() {
-    if (!this.light || !this.fog) return;
-    const light = this.light;
-    const seen = new Set<string>();
-    const allVisibles: {x: number, y: number}[] = [];
-    const addVisible = (v: {x: number, y: number}) => {
-      const key = `${v.x},${v.y}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        allVisibles.push(v);
+    if (!this.light || !this.fog || this.grid.length === 0) return;
+    try {
+      const light = this.light;
+      const seen = new Set<string>();
+      const allVisibles: {x: number, y: number}[] = [];
+      const addVisible = (v: {x: number, y: number}) => {
+        const key = `${v.x},${v.y}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          allVisibles.push(v);
+        }
+      };
+
+      // Own cone
+      const ownVis = this.computeVisibleTilesFor(this.playerX, this.playerY, this.direction);
+      ownVis.forEach(addVisible);
+
+      // Other players' cones
+      this.otherPlayers.forEach((other: OtherPlayer) => {
+        const otherVis = this.computeVisibleTilesFor(other.x, other.y, other.direction);
+        otherVis.forEach(addVisible);
+      });
+
+      light.clear();
+      light.fillStyle(0xffffff, 1);
+      allVisibles.forEach(v => {
+        light.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
+      });
+
+      // Visual diff for cones
+      if (this.visualCones) {
+        const visualCones = this.visualCones;
+        visualCones.clear();
+
+        // Own cone full brightness tint
+        visualCones.fillStyle(0xffffff, 0.3);
+        ownVis.forEach(v => {
+          visualCones.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
+        });
+
+        // Other players' cones semi-transparent tint
+        this.otherPlayers.forEach((other: OtherPlayer) => {
+          const otherVis = this.computeVisibleTilesFor(other.x, other.y, other.direction);
+          visualCones.fillStyle(0xaaaaaa, 0.3);
+          otherVis.forEach(v => {
+            visualCones.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
+          });
+        });
       }
-    };
-
-    // Own cone
-    const ownVis = this.computeVisibleTilesFor(this.playerX, this.playerY, this.direction);
-    ownVis.forEach(addVisible);
-
-    // Other players' cones
-    this.otherPlayers.forEach((other: OtherPlayer) => {
-      const otherVis = this.computeVisibleTilesFor(other.x, other.y, other.direction);
-      otherVis.forEach(addVisible);
-    });
-
-    light.clear();
-    light.fillStyle(0xffffff, 1);
-    allVisibles.forEach(v => {
-      light.fillRect(v.x * this.tileSize, v.y * this.tileSize, this.tileSize, this.tileSize);
-    });
+    } catch (error) {
+      console.error('MazeScene updateVisibility error:', error);
+    }
   }
 
   update() {
@@ -273,9 +407,10 @@ class MazeScene extends Phaser.Scene {
   }
 }
 
-const PhaserGame = ({ gameState, room }: Props) => {
+const PhaserGame = ({ gameState, room, sessionId = '' }: Props) => {
   const gameRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<any>(null);
+  const gameInstanceRef = useRef<any>(null);
 
   useEffect(() => {
     if (!gameRef.current) return;
@@ -293,17 +428,18 @@ const PhaserGame = ({ gameState, room }: Props) => {
 
     game = new Phaser.Game(config);
 
-    // Start scene with maze data
+    // Start scene with initial empty data
     game.scene.start('MazeScene', {
-      grid: gameState?.grid,
-      roundState: gameState?.roundState || 'waiting',
-      playerX: gameState?.players?.get(gameState?.sessionId)?.x || 1,
-      playerY: gameState?.players?.get(gameState?.sessionId)?.y || 1,
-      sessionId: gameState?.sessionId,
+      grid: [],
+      roundState: 'waiting',
+      playerX: 1,
+      playerY: 1,
+      sessionId: sessionId,
       room: room,
     });
 
-    // Store scene reference
+    // Store references
+    gameInstanceRef.current = game;
     sceneRef.current = game.scene.getScene('MazeScene');
 
     return () => {
@@ -311,34 +447,55 @@ const PhaserGame = ({ gameState, room }: Props) => {
         game.destroy(true);
       }
     };
-  }, [gameState]);
+  }, []); // Mount once
+
+  useEffect(() => {
+    if (!sceneRef.current || !gameState) return;
+
+    // Update scene with current gameState
+    sceneRef.current.updateGameState({
+      grid: gameState.grid,
+      roundState: gameState.roundState || 'waiting',
+      players: gameState.players,
+      sessionId,
+      room,
+    });
+  }, [gameState, sessionId, room]);
 
   useEffect(() => {
     if (!room || !sceneRef.current) return;
 
     const handleStateChange = (changes: any[]) => {
+      // Process changes more efficiently - only update affected players
       changes.forEach(change => {
-        if (change.field === 'players') {
-          room.state.players.forEach((player: Player, id: string) => {
-            sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
-          });
+        if (change.field === 'players' && change.value) {
+          const playerId = change.path?.[1]; // From MapSchema path
+          if (playerId) {
+            const player = room.state.players.get(playerId);
+            if (player) {
+              sceneRef.current.updatePlayer(playerId, player.x, player.y, player.direction || 'down');
+            }
+          } else {
+            // Fallback full update if path not available
+            room.state.players.forEach((player: Player, id: string) => {
+              sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
+            });
+          }
         }
       });
     };
 
     room.state.onChange = handleStateChange;
 
-    // Initial update
-    if (sceneRef.current) {
-      room.state.players.forEach((player: Player, id: string) => {
-        sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
-      });
-    }
+    // Initial players update
+    room.state.players.forEach((player: Player, id: string) => {
+      sceneRef.current.updatePlayer(id, player.x, player.y, player.direction || 'down');
+    });
 
     return () => {
       room.state.onChange = null;
     };
-  }, [room, gameState.sessionId]);
+  }, [room]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Defer server sync to 3.2; local movement handled in Phaser scene

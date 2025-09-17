@@ -55,33 +55,29 @@ export default async () => {
     serverProcess.stdout?.on('data', onData);
   });
 
-  // Wait for health check after WS ready
+  // Wait for health check after WS ready with retry
   console.log('Waiting for /health endpoint...');
-  await new Promise<void>((resolve, reject) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-      console.log('Health check timeout');
-      reject(new Error('Health check timeout'));
-    }, 10000);
-
-    fetch('http://localhost:2567/health', { signal: controller.signal })
-      .then((res) => {
-        clearTimeout(timeout);
-        if (res.ok) {
-          console.log('Health check passed');
-          resolve();
-        } else {
-          console.log('Health check failed');
-          reject(new Error(`Health check failed: ${res.status}`));
-        }
-      })
-      .catch((err) => {
-        clearTimeout(timeout);
-        console.error('Health check error:', err);
-        reject(err);
-      });
-  });
+  let retryCount = 0;
+  const maxRetries = 5;
+  const retryDelay = 500; // ms
+  while (retryCount < maxRetries) {
+    try {
+      const res = await fetch('http://localhost:2567/health');
+      if (res.ok) {
+        console.log('Health check passed');
+        break;
+      } else {
+        throw new Error(`Health check failed: ${res.status}`);
+      }
+    } catch (err) {
+      retryCount++;
+      if (retryCount >= maxRetries) {
+        throw new Error(`Health check failed after ${maxRetries} retries: ${err}`);
+      }
+      console.log(`Health check attempt ${retryCount} failed, retrying in ${retryDelay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+  }
 
   // Store the process for teardown
   if (serverProcess.pid) {

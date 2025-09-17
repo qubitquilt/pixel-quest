@@ -116,8 +116,8 @@ const LobbyPage = () => {
     }
 
     return () => {
-      console.log('LobbyPage useEffect cleanup: calling room.leave()');
-      if (!isHost) room?.leave();
+      console.log('LobbyPage useEffect cleanup: no leave called for persistence');
+      // Persist room across navigation; leave handled elsewhere if needed
     };
   }, [roomId, room, router]);
 
@@ -185,7 +185,7 @@ const LobbyPage = () => {
           )}
           {gameState.roundState === 'playing' && (
             <div className="mt-4">
-              <PhaserGame gameState={gameState} />
+              <PhaserGame gameState={gameState} room={room} sessionId={room?.sessionId || ''} />
             </div>
           )}
         </>

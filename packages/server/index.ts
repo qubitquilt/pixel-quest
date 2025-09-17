@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { Server } from "colyseus";
+import { WebSocketTransport } from "@colyseus/ws-transport";
 import { createServer } from "http";
 import express from "express";
 import { MazeRaceRoom } from "./rooms/MazeRaceRoom";
@@ -13,7 +14,9 @@ app.get('/health', (req, res) => {
 });
 
 const gameServer = new Server({
-  server: createServer(app),
+  transport: new WebSocketTransport({
+    server: createServer(app),
+  }),
 });
 
 // Register your room handlers

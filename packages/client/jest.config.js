@@ -13,6 +13,7 @@ module.exports = {
     "@/components/ui/(.*)": "<rootDir>/components/ui/$1",
     "@/shared/(.*)": "<rootDir>/../shared/$1",
     '^(\.{1,2}/.*)\.js$': '$1',
+    "^@/(.*)$": "<rootDir>/$1",
   },
   transform: {
     '^.+\\.(js|jsx|ts|tsx|mjs)$': 'babel-jest',

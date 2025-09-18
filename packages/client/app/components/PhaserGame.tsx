@@ -112,13 +112,14 @@ class MazeScene extends Phaser.Scene {
       this.walls = this.physics.add.staticGroup();
 
       // Fog of war cover with mask
-      this.cover = this.add.graphics({ fillStyle: { color: 0x000000, alpha: 1.0 } });
+      this.cover = this.add.graphics();
+      this.cover.fillStyle(0x000000, 1.0);
       this.cover.fillRect(0, 0, 672, 672);
       this.cover.setDepth(1);
 
-      this.flashlightGraphics = this.add.graphics({ add: false });
+      this.flashlightGraphics = this.add.graphics();
       const mask = this.flashlightGraphics.createGeometryMask();
-      this.cover.setMask(mask);
+      (this.cover as any).setMask(mask);
       mask.invertAlpha = true;
 
       // Visual cones overlay
@@ -433,7 +434,7 @@ class MazeScene extends Phaser.Scene {
   private computeVisibilityPolygon(posX: number, posY: number, angle: number): Phaser.Geom.Point[] {
     if (!this.walls) return [];
 
-    const rayLength = 700;
+    const rayLength = 400;
     const coneWidth = Phaser.Math.DegToRad(80);
     const numRays = 80;
     const startAngle = angle - coneWidth / 2;
@@ -442,7 +443,7 @@ class MazeScene extends Phaser.Scene {
     const wallChildren = this.walls.getChildren();
     const intersectionPoints: Phaser.Geom.Point[] = [];
 
-    for (let i = 0; i <= numRays; i++) {
+    for (let i = 0; i < numRays; i++) {
       const rayAngle = startAngle + i * angleStep;
       const endX = posX + rayLength * Math.cos(rayAngle);
       const endY = posY + rayLength * Math.sin(rayAngle);
@@ -468,7 +469,31 @@ class MazeScene extends Phaser.Scene {
       if (closestIntersection) {
         intersectionPoints.push(closestIntersection);
       } else {
-        intersectionPoints.push(new Phaser.Geom.Point(endX, endY));
+        // Fallback to scene bounds if no wall hit
+        const playerPos = new Phaser.Math.Vector2(posX, posY);
+        const sceneBounds = new Phaser.Geom.Rectangle(0, 0, this.scale.width, this.scale.height);
+        const boundsPoints = Phaser.Geom.Intersects.GetLineToRectangle(ray, sceneBounds);
+        let closestBounds: Phaser.Geom.Point | null = null;
+        if (boundsPoints.length > 0) {
+          boundsPoints.forEach((p: Phaser.Geom.Point) => {
+            const distToP = Phaser.Math.Distance.BetweenPoints(playerPos, p);
+            if (!closestBounds || distToP < Phaser.Math.Distance.BetweenPoints(playerPos, closestBounds)) {
+              closestBounds = p;
+            }
+          });
+        }
+        if (closestBounds) {
+          // Use bounds if closer than ray end
+          const distToBounds = closestBounds ? Phaser.Math.Distance.BetweenPoints(playerPos, closestBounds) : Infinity;
+          const distToEnd = rayLength;
+          if (distToBounds < distToEnd) {
+            intersectionPoints.push(closestBounds);
+          } else {
+            intersectionPoints.push(new Phaser.Geom.Point(endX, endY));
+          }
+        } else {
+          intersectionPoints.push(new Phaser.Geom.Point(endX, endY));
+        }
       }
     }
 
@@ -493,7 +518,8 @@ class MazeScene extends Phaser.Scene {
         this.flashlightGraphics.fillPoints(ownPolygon, true);
       }
 
-      // Other players' polygons for union reveal
+      // Other players' polygons for union reveal (DEFERRED TO STORY 4.2)
+      /*
       this.otherPlayers.forEach((other) => {
         const otherPosX = other.x * this.tileSize + this.tileSize / 2;
         const otherPosY = other.y * this.tileSize + this.tileSize / 2;
@@ -503,6 +529,7 @@ class MazeScene extends Phaser.Scene {
           this.flashlightGraphics.fillPoints(otherPolygon, true);
         }
       });
+      */
 
       // Visual cones overlay
       this.visualCones.clear();
@@ -513,7 +540,8 @@ class MazeScene extends Phaser.Scene {
         this.visualCones.fillPoints(ownPolygon, true);
       }
 
-      // Other players' cones tinted
+      // Other players' cones tinted (DEFERRED TO STORY 4.2)
+      /*
       this.otherPlayers.forEach((other) => {
         const otherPosX = other.x * this.tileSize + this.tileSize / 2;
         const otherPosY = other.y * this.tileSize + this.tileSize / 2;
@@ -524,6 +552,7 @@ class MazeScene extends Phaser.Scene {
           this.visualCones.fillPoints(otherPolygon, true);
         }
       });
+      */
     } catch (error) {
       console.error('MazeScene updateVisibility error:', error);
     }

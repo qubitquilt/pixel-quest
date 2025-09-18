@@ -22,3 +22,6 @@ jest.mock('ws', () => ({
 // Suppress console output during tests for cleaner run logs
 console.log = jest.fn();
 console.error = jest.fn();
+
+// Global mock for Phaser to apply to all imports
+jest.mock('phaser', () => require('@/test/mocks/phaser'));

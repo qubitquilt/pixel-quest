@@ -11,9 +11,6 @@ describe('Winner detection', () => {
   beforeEach(() => {
     room = new MazeRaceRoom();
     room.onCreate({});
-    // Avoid scheduling real timers during unit tests
-    room.resetDelay = 0;
-
     hostClient = ({ sessionId: 'host-session', auth: {}, send: jest.fn(), onMessage: jest.fn(), id: 'host-id' } as unknown) as Client;
     guestClient = ({ sessionId: 'guest-session', auth: {}, send: jest.fn(), onMessage: jest.fn(), id: 'guest-id' } as unknown) as Client;
 
@@ -65,4 +62,6 @@ describe('Winner detection', () => {
     // Ensure roundState is round_over
     expect(state.roundState).toBe('round_over');
   });
+  afterEach(() => { room.onDispose(); });
+
 });

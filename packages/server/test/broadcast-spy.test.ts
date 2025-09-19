@@ -52,4 +52,6 @@ describe('Broadcast behavior', () => {
 
     spy.mockRestore();
   });
+  afterEach(() => { room.onDispose(); });
+
 });

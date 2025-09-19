@@ -500,6 +500,8 @@ describe("MazeRaceRoom", () => {
       expect(state.players.get('guest-session')!.y).toBe(initialY);
     });
   });
+  afterEach(() => { room.onDispose(); });
+
 });
     describe('Maze State Synchronization', () => {
       let room: MazeRaceRoom;

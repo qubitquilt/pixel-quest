@@ -680,8 +680,36 @@ const PhaserGame = ({ room, sessionId }: Props) => {
 
       room.state.onChange = handleStateChange;
 
+      // Listen for roundOver messages to display a lightweight overlay
+      const roundOverHandler = (payload: any) => {
+        try {
+          const winnerId = payload?.winnerId || room.state.roundWinnerId;
+          const isSelf = winnerId === sessionId;
+          // Simple overlay: create DOM element inside gameRef
+          const container = gameRef.current;
+          if (!container) return;
+          // Remove existing overlay if present
+          const existing = container.querySelector('.round-over-overlay');
+          if (existing) existing.remove();
+
+          const overlay = document.createElement('div');
+          overlay.className = 'round-over-overlay fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 text-white text-2xl';
+          overlay.style.zIndex = '9999';
+          overlay.textContent = isSelf ? 'You won!' : `Winner: ${winnerId}`;
+          container.appendChild(overlay);
+
+          // Auto-remove after 2.5s to match server reset timing
+          setTimeout(() => overlay.remove(), 2500);
+        } catch (err) {
+          console.error('roundOver handler error', err);
+        }
+      };
+
+      room.onMessage('roundOver', roundOverHandler as any);
+
       return () => {
         room.state.onChange = null;
+        room.removeMessageListener && room.removeMessageListener('roundOver', roundOverHandler as any);
       };
     } catch (error) {
       console.error('PhaserGame room useEffect error:', error);

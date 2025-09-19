@@ -20,6 +20,8 @@ export class MazeRaceRoom extends Room<GameState> {
   private handleMove(client: Client, message: any): void {
     const { dx, dy, direction } = message;
     const player = this.state.players.get(client.sessionId);
+    // Do not accept moves if round not playing
+    if (this.state.roundState !== 'playing') return;
     if (player && dx !== undefined && dy !== undefined) {
       const newX = player.x + dx;
       const newY = player.y + dy;
@@ -31,6 +33,21 @@ export class MazeRaceRoom extends Room<GameState> {
           player.y = newY;
           if (direction) {
             player.direction = direction;
+          }
+          // Check for treasure overlap (grid-cell equality)
+          if (this.state.treasureIndex >= 0) {
+            const playerIndex = player.y * this.state.mazeWidth + player.x;
+            if (playerIndex === this.state.treasureIndex && !this.state.roundWinnerId) {
+              // Set winner atomically
+              this.state.roundWinnerId = player.id;
+              this.state.roundState = 'round_over';
+              this.broadcast('roundOver', { winnerId: player.id });
+              // After short delay, reset treasure and set waiting
+              setTimeout(() => {
+                this.state.treasureIndex = -1;
+                this.state.roundState = 'waiting';
+              }, 2500);
+            }
           }
         } else if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
           console.warn(`Invalid move for ${client.sessionId}: wall at (${newX}, ${newY})`);

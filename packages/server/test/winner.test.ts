@@ -11,6 +11,8 @@ describe('Winner detection', () => {
   beforeEach(() => {
     room = new MazeRaceRoom();
     room.onCreate({});
+    // Avoid scheduling real timers during unit tests
+    room.resetDelay = 0;
 
     hostClient = ({ sessionId: 'host-session', auth: {}, send: jest.fn(), onMessage: jest.fn(), id: 'host-id' } as unknown) as Client;
     guestClient = ({ sessionId: 'guest-session', auth: {}, send: jest.fn(), onMessage: jest.fn(), id: 'guest-id' } as unknown) as Client;

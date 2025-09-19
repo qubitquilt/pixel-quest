@@ -70,6 +70,14 @@ export class GameState extends Schema {
   @type(["number"])
   grid = new ArraySchema<number>();
 
+  // Treasure stored as flat grid index (y * mazeWidth + x), -1 when none
+  @type("number")
+  treasureIndex: number = -1;
+
+  // Result of the round: winnerId and elapsedMs
+  @type("string")
+  roundWinnerId: string = "";
+
   root: GameState;
 
   constructor() {

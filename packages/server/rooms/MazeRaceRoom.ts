@@ -47,10 +47,19 @@ export class MazeRaceRoom extends Room<GameState> {
               this.state.roundState = 'round_over';
               this.broadcast('roundOver', { winnerId: player.id });
               // After short delay, reset treasure and set waiting
-              setTimeout(() => {
+              if (this.resetDelay > 0) {
+                // clear any existing timer first
+                if (this.resetTimer) clearTimeout(this.resetTimer);
+                this.resetTimer = setTimeout(() => {
+                  this.state.treasureIndex = -1;
+                  this.state.roundState = 'waiting';
+                  this.resetTimer = null;
+                }, this.resetDelay);
+              } else {
+                // For tests, allow immediate reset synchronously
                 this.state.treasureIndex = -1;
                 this.state.roundState = 'waiting';
-              }, 2500);
+              }
             }
           }
         } else if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {

@@ -4,6 +4,10 @@ import { ArraySchema } from "@colyseus/schema";
 import { GameState, Player, Maze } from "shared";
 
 export class MazeRaceRoom extends Room<GameState> {
+  // Configurable reset delay to allow tests to avoid open timers
+  resetDelay: number = 2500;
+  private resetTimer: any = null;
+
   onCreate(options: any) {
     this.state = new GameState();
     this.state.root = this.state;

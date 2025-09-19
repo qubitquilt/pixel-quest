@@ -99,6 +99,15 @@ export class MazeRaceRoom extends Room<GameState> {
     if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log("room", this.roomId, "disposing...");
     }
+    // Clear any pending reset timer to avoid leaking handles (important for Jest)
+    if (this.resetTimer) {
+      try {
+        clearTimeout(this.resetTimer);
+      } catch (e) {
+        // ignore
+      }
+      this.resetTimer = null;
+    }
   }
 
   onStartGame(client: Client, message: any) {

@@ -3,12 +3,31 @@ import { Room, Client } from "colyseus";
 import { ArraySchema } from "@colyseus/schema";
 import { GameState, Player, Maze } from "shared";
 
+
+
+
+
+
+
+interface MoveMessage {
+  dx: number;
+  dy: number;
+  direction: string;
+}
+
+
+interface JoinOptions {
+  name: string;
+}
+
+
+
 export class MazeRaceRoom extends Room<GameState> {
   // Configurable reset delay to allow tests to avoid open timers
   resetDelay: number = 2500;
-  private resetTimer: any = null;
+  private resetTimer: NodeJS.Timeout | null = null;
 
-  onCreate(options: any) {
+  onCreate(options: unknown) {
     this.state = new GameState();
     this.state.root = this.state;
   
@@ -18,11 +37,12 @@ export class MazeRaceRoom extends Room<GameState> {
   
     this.onMessage('startGame', this.onStartGame.bind(this));
 
-    this.onMessage('move', (client: Client, message: any) => this.handleMove(client, message));
+    this.onMessage('move', (client: Client, message: unknown) => this.handleMove(client, message));
   }
 
-  private handleMove(client: Client, message: any): void {
-    const { dx, dy, direction } = message;
+  private handleMove(client: Client, message: unknown): void {
+    const moveMessage = message as MoveMessage;
+	    const { dx, dy, direction } = moveMessage;
     const player = this.state.players.get(client.sessionId);
     // Do not accept moves if round not playing
     if (this.state.roundState !== 'playing') return;
@@ -72,7 +92,7 @@ export class MazeRaceRoom extends Room<GameState> {
     // State change broadcasts automatically via Colyseus
   }
 
-  onJoin(client: Client, options: any) {
+  onJoin(client: Client, options: JoinOptions) {
     if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log(client.sessionId, "joined!");
     }
@@ -103,14 +123,15 @@ export class MazeRaceRoom extends Room<GameState> {
     if (this.resetTimer) {
       try {
         clearTimeout(this.resetTimer);
-      } catch (e) {
+      } catch {
         // ignore
       }
       this.resetTimer = null;
     }
   }
 
-  onStartGame(client: Client, message: any) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+	  onStartGame(client: Client, _message: unknown) {
     if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV === 'development' && !process.env.PLAYWRIGHT_TEST) {
       console.log(`${client.sessionId} requested to start game`);
     }
@@ -132,6 +153,27 @@ export class MazeRaceRoom extends Room<GameState> {
       this.state.mazeWidth = maze.width;
       this.state.mazeHeight = maze.height;
       this.state.grid = new ArraySchema(...maze.grid.flat());
+
+  // Place treasure randomly on a path cell (excluding entrance and exit)
+  const pathIndices: number[] = [];
+  for (let i = 0; i < this.state.grid.length; i++) {
+    if (this.state.grid[i] === 1) {
+      const y = Math.floor(i / this.state.mazeWidth);
+      const x = i % this.state.mazeWidth;
+      // Exclude entrance (y=0, x=1) and exit (y=20, x=19)
+      if (!((y === 0 && x === 1) || (y === 20 && x === 19))) {
+        pathIndices.push(i);
+      }
+    }
+  }
+  if (pathIndices.length > 0) {
+    const treasureIndex = pathIndices[Math.floor(Math.random() * pathIndices.length)];
+    this.state.treasureIndex = treasureIndex;
+  } else {
+    // Fallback if no valid paths (should not happen)
+    this.state.treasureIndex = -1;
+  }
+
       
       // Set player start positions (all players start at entrance)
       this.state.players.forEach((player: Player) => {

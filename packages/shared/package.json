@@ -1,7 +1,7 @@
 {
   "name": "shared",
   "version": "1.0.0",
-  "type": "commonjs",
+  "type": "module",
   "main": "dist/index.js",
   "dependencies": {
     "@colyseus/schema": "^3.0.60"
@@ -9,6 +9,7 @@
   "scripts": {
     "build": "pnpm exec tsc --build tsconfig.build.json",
     "clean": "rimraf dist",
+    "lint": "pnpm exec eslint index.ts types/index.ts",
     "type-check": "tsc --noEmit"
   },
   "types": "dist/index.d.ts",
@@ -20,6 +21,9 @@
     "@babel/plugin-transform-class-static-block": "^7.28.3",
     "@babel/plugin-transform-private-methods": "^7.27.1",
     "@babel/preset-env": "^7.28.3",
-    "@babel/preset-typescript": "^7.27.1"
+    "@babel/preset-typescript": "^7.27.1",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint": "^9.35.0"
   }
 }

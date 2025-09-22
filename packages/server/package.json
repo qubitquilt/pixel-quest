@@ -1,7 +1,7 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "type": "commonjs",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "pnpm --filter shared build && pnpm exec tsc --build",
@@ -9,13 +9,17 @@
     "dev": "pnpm exec ts-node index.ts",
     "start": "pnpm exec node dist/index.js",
     "type-check": "tsc --noEmit",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+	    "lint:fix": "eslint . --ext .ts --fix"
   },
   "devDependencies": {
     "@colyseus/testing": "^0.16.3",
     "@types/express": "^5.0.3",
     "@types/node": "^20.17.9",
-    "@types/ws": "^8.5.10"
+    "@types/ws": "^8.5.10",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0",
+    "eslint": "^9.35.0"
   },
   "dependencies": {
     "@colyseus/schema": "^3.0.60",

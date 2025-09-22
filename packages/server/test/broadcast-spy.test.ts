@@ -46,7 +46,7 @@ describe('Broadcast behavior', () => {
     // broadcast should have been called exactly once with 'roundOver' and payload containing winnerId
     const calls = spy.mock.calls.filter((c: any[]) => c[0] === 'roundOver');
     expect(calls.length).toBe(1);
-    const payload = calls[0][1];
+    const payload = calls[0][1] as { winnerId: string };
     expect(payload).toHaveProperty('winnerId');
     expect([host.id, guest.id]).toContain(payload.winnerId);
 

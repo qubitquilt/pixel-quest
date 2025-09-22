@@ -8,8 +8,8 @@
     "start": "concurrently \"pnpm --filter client start\" \"pnpm --filter server start\"",
     "test": "pnpm --filter shared build && pnpm --filter client --filter server --parallel test",
     "test:e2e": "pnpm --filter client e2e",
-    "lint": "pnpm --recursive exec lint",
-    "lint:fix": "pnpm --recursive exec lint:fix",
+    "lint": "pnpm -r lint",
+    "lint:fix": "pnpm -r lint:fix",
     "type-check": "pnpm --recursive exec type-check",
     "clean": "pnpm --recursive exec clean && rimraf node_modules .pnpm pnpm-lock.yaml"
   },

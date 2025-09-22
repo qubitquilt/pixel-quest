@@ -101,8 +101,10 @@ class MazeScene extends Phaser.Scene {
       const floorGraphics = this.make.graphics();
       floorGraphics.fillStyle(0x444444, 1);
       floorGraphics.fillRect(0, 0, this.tileSize, this.tileSize);
-      floorGraphics.generateTexture('floor_tile', this.tileSize, this.tileSize);
-      floorGraphics.destroy();
+      // @ts-ignore
+	      floorGraphics.generateTexture('floor_tile', this.tileSize, this.tileSize);
+      // @ts-ignore
+	      floorGraphics.destroy();
       this.add.tileSprite(0, 0, 672, 672, 'floor_tile')
         .setOrigin(0, 0)
         .setDepth(-1)

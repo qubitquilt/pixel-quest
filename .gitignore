@@ -19,3 +19,29 @@ test-results/
 dist/
 .swc
 coverage
+
+
+# Turbo (if used)
+.turbo/
+
+# Binaries
+.bin/
+
+# Environment variables
+.env*.local
+.env.local*
+
+# Logs
+*.log
+logs/
+
+# pnpm
+# pnpm-store/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db

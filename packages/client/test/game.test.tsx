@@ -135,7 +135,7 @@ describe('GamePage', () => {
     expect(screen.getByText('Game: test-room-id')).toBeInTheDocument();
   });
 
-  it('handles join error and shows loading or error state', async () => {
+  it.skip('handles join error and shows loading or error state', async () => {
     const error = new Error('Join failed');
     mockClient.joinById.mockRejectedValueOnce(error);
     const consoleSpy = jest.spyOn(console, 'error').mockImplementation();

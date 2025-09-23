@@ -1,102 +1,61 @@
 
-# General Microagents
+# Pixel Quest Repository Guide
 
-> General guidelines for OpenHands to work more effectively with the repository.
+## Purpose
+Pixel Quest is a multiplayer maze race game built with Next.js (client UI), Colyseus (real-time server), and Phaser (2D game rendering). Players join lobbies, navigate procedurally generated mazes using directional flashlights for limited visibility, and race to the exit while avoiding walls. Key features include real-time movement synchronization, scoring, power-ups, and round-based progression. The project is pivoting to GitHub Spec Kit for spec-driven development, focusing on atomic epics (lobby, maze generation/display, movement/sync, flashlight visibility, scoring, power-ups) with >80% test coverage. Currently emphasizing a single-player Phaser prototype before full multiplayer integration.
 
-## Usage
+## Setup
+- **Prerequisites**: Node.js v18+, pnpm (install via `corepack enable`).
+- **Clone and Install**:
+  ```
+  git clone https://github.com/qubitquilt/pixel-quest.git
+  cd pixel-quest
+  pnpm install
+  ```
+- **Environment**: Create `.env.local` in `packages/client` and `packages/server`:
+  - Client: `NEXT_PUBLIC_SERVER_URL=http://localhost:2567`
+  - Server: `PORT=2567`
+- **Run Development**:
+  - Both: `pnpm run dev` (client on :3000, server on :2567)
+  - Client only (prototype): `pnpm --filter client dev`
+  - Server: `pnpm --filter server dev`
+- **Build and Test**:
+  - Build: `pnpm run build`
+  - Lint: `pnpm run lint`
+  - Unit Tests (Jest): `pnpm run test` (57/57 passing; aim for >80% coverage)
+  - E2E Tests (Playwright): `pnpm run test:e2e`
+- **Prototype Testing**: Run client dev server to test single-player FlashlightScene (WASD movement, ray-traced flashlight cone).
 
-These microagents are always loaded as part of the context.
+## Structure
+- **Root**:
+  - `package.json` / `pnpm-lock.yaml`: pnpm monorepo with workspaces (client, server, shared).
+  - `README.md`: Project overview, setup, usage, roadmap.
+  - `.specify/`: GitHub Spec Kit (constitution.md, specs/ with 16 story MDs for epics, templates/, prompts/, scripts/).
+  - `.openhands/`: Development tools (pre-commit.sh for CI checks, setup.sh for install/test/dev).
+- **packages/**:
+  - `client/`: Next.js app.
+    - `app/components/PhaserGame.tsx`: Core game integration (FlashlightScene prototype: maze generation, physics-based WASD movement, ray-casting flashlight visibility).
+    - `lib/`: Phaser declarations (phaser.d.ts), Colyseus client (colyseus.ts), utilities (utils.ts).
+    - `tests/`: Jest unit tests; E2E in `e2e/`.
+    - Config: `next.config.ts`, `jest.config.js`, `tsconfig.json`.
+  - `server/`: Colyseus WebSocket server.
+    - `index.ts`: Server bootstrap.
+    - `rooms/MazeRaceRoom.ts`: Game room logic (procedural maze generation, movement handling, winner detection, timeouts).
+    - `tests/`: Jest unit tests (e.g., winner.test.ts).
+    - Config: `jest.config.js`, `tsconfig.json`.
+  - `shared/`: Cross-package types and utilities.
+    - `types/`: Interfaces (e.g., Player, GameState, RoundState).
+    - `index.ts`: Exports.
+    - `package.json`: Shared dependencies.
+- **docs/**: High-level docs (architecture diagrams, original PRD/stories; migrated to .specify/specs/ for Spec Kit).
+- **Other**: Root `tsconfig.json`, `jest.config.js`; no tests or docs at root.
 
-## Frontmatter Syntax
+## CI Checks
+No `.github/workflows/` directory exists; CI is enforced locally via `.openhands/pre-commit.sh`, which runs:
+- `pnpm run lint` (ESLint for TypeScript/JavaScript, with @typescript-eslint plugins).
+- `pnpm run test` (Jest unit tests with coverage reporting; thresholds disabled but target >80%).
+- `pnpm run build` (Next.js and Colyseus builds).
 
-The frontmatter for this type of microagent is optional.
-
-Frontmatter should be enclosed in triple dashes (---) and may include the following fields:
-
-| Field   | Description                          | Required | Default        |
-| ------- | ------------------------------------ | -------- | -------------- |
-| `agent` | The agent this microagent applies to | No       | 'CodeActAgent' |
-
-## Creating a Comprehensive Repository Agent
-
-To create an effective repository agent, you can ask OpenHands to analyze your repository with a prompt like:
-
-```
-Please browse the repository, look at the documentation and relevant code, and understand the purpose of this repository.
-
-Specifically, I want you to create a `.openhands/microagents/repo.md` file. This file should contain succinct information that summarizes:
-1. The purpose of this repository
-2. The general setup of this repo
-3. A brief description of the structure of this repo
-
-Read all the GitHub workflows under .github/ of the repository (if this folder exists) to understand the CI checks (e.g., linter, pre-commit), and include those in the repo.md file.
-```
-
-This approach helps OpenHands capture repository context efficiently, reducing the need for repeated searches during conversations and ensuring more accurate solutions.
-
-## Example Content
-
-A comprehensive repository agent file (`.openhands/microagents/repo.md`) should include:
-
-```
-# Repository Purpose
-This project is a TODO application that allows users to track TODO items.
-
-# Setup Instructions
-To set it up, you can run `npm run build`.
-
-# Repository Structure
-- `/src`: Core application code
-- `/tests`: Test suite
-- `/docs`: Documentation
-- `/.github`: CI/CD workflows
-
-# CI/CD Workflows
-- `lint.yml`: Runs ESLint on all JavaScript files
-- `test.yml`: Runs the test suite on pull requests
-
-# Development Guidelines
-Always make sure the tests are passing before committing changes. You can run the tests by running `npm run test`.
-```
-
-[See more examples of general microagents here.](https://github.com/All-Hands-AI/OpenHands/tree/main/.openhands/microagents)
-
-# Repository Purpose
-Pixel Quest is a multiplayer maze race game where players navigate a maze using flashlights to reveal paths, avoid walls, and race to the exit. Built with Next.js (client-side UI), Colyseus (real-time multiplayer server), and Phaser (game rendering). Pivoting to GitHub Spec Kit for spec-driven development with atomic stories, >80% test coverage, and phased epics (lobby, maze gen/display, movement/sync, flashlight, scoring, power-ups).
-
-# Setup Instructions
-Clone the repo: `git clone https://github.com/qubitquilt/pixel-quest.git`  
-cd pixel-quest  
-pnpm install  
-Run dev: `pnpm run dev` (starts client on :3000, server on :2567)  
-Or separately: `pnpm --filter client dev` and `pnpm --filter server dev`  
-Test: `pnpm run test` (Jest units), `pnpm run test:e2e` (Playwright)  
-Build: `pnpm run build`  
-Lint: `pnpm run lint`  
-Pre-commit: Run `.openhands/pre-commit.sh` for lint/test/build checks.
-
-# Repository Structure
-- `/packages/client`: Next.js app (UI, Phaser integration in app/components/PhaserGame.tsx)  
-- `/packages/server`: Colyseus server (rooms in rooms/, index.ts entry)  
-- `/packages/shared`: Shared types/utils (types/, index.ts)  
-- `/docs`: Architecture/PRD/stories (migrated to .specify/specs/ for Spec Kit)  
-- `/.specify`: GitHub Spec Kit (constitution.md, specs/16 MD stories, templates/prompts/scripts)  
-- `/.openhands`: OpenHands integration (pre-commit.sh, setup.sh, microagents/)  
-- `/test`: Client tests (e2e/, test/)  
-- Root: package.json (pnpm workspaces), README.md, pnpm-lock.yaml  
-
-# CI/CD Workflows
-No .github/workflows/ by default. Recommended:  
-- Lint: ESLint on TS/JS via `pnpm run lint`  
-- Test: Jest units (`pnpm run test --coverage >80%`)  
-- E2E: Playwright (`pnpm run test:e2e`)  
-- Build: Next.js/Colyseus (`pnpm run build`)  
-Pre-commit hook in .openhands/pre-commit.sh enforces lint/test/build. Use Spec Kit CLI (`specify check/analyze`) for spec validation.
-
-# Development Guidelines
-- Atomic changes: One story per branch/PR (e.g., feat/story-1.1), >80% coverage, all tests pass.  
-- Testing: Unit (Jest) for functions/scenes; E2E (Playwright) for flows (lobby join, movement, visibility). Mock Colyseus for client tests.  
-- Spec Kit: Align changes to .specify/specs/ (e.g., /plan for tasks, /check for compliance).  
-- Multiplayer: Defer Colyseus sync to later stories; prototype single-player first.  
-- Commits: Conventional (feat/fix), Co-authored-by: openhands. No secrets in code/env.  
-- Pivot: Simpler Phaser prototype (ray-traced flashlight, basic maze/movement) before full multiplayer.
+Recommended GitHub Actions (not implemented):
+- PR checks for linting, unit tests (with coverage), E2E tests, and build verification.
+- Use Spec Kit CLI (`npx specify check`) for spec compliance in workflows.

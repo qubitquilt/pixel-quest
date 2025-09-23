@@ -40,7 +40,7 @@ describe('Winner detection', () => {
     // Move guest to (1,1) from start (1,0)
     (room as any).handleMove(guestClient, { dx: 0, dy: 1 });
 
-    jest.advanceTimersByTime(3000);
+    jest.advanceTimersByTime(1000); // Check before timeout resets to 'waiting'
 
     expect(state.roundWinnerId).toBe(guest.id);
     expect(state.roundState).toBe('round_over');
@@ -63,7 +63,7 @@ describe('Winner detection', () => {
     (room as any).handleMove(hostClient, { dx: 1, dy: 0 });
     (room as any).handleMove(guestClient, { dx: -1, dy: 0 });
 
-    jest.advanceTimersByTime(3000);
+    jest.advanceTimersByTime(1000); // Check before timeout resets to 'waiting'
 
     // Exactly one winner set
     expect(state.roundWinnerId).toBeTruthy();

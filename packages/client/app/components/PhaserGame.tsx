@@ -15,36 +15,39 @@ interface OtherPlayer {
 }
 
 class FlashlightScene extends Phaser.Scene {
-  player = null;
-  cursors = null;
-  walls = null;
-
-  grid: number[][] = [];
+  player: Phaser.Physics.Arcade.Sprite | null = null;
+  cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
+  walls: Phaser.Physics.Arcade.StaticGroup | null = null;
 
 
 
 
-  tileSize = 32;
-  playerX = 1;
-  playerY = 1;
-  isMoving = false;
-  moveSpeed = 200;
-  rotationSpeed = Phaser.Math.DegToRad(180);
-  keys = null;
-  visualCones = null;
-  grid: number[][] = [];
+
+  tileSize: number = 32;
+  playerX: number = 1;
+  playerY: number = 1;
+  isMoving: boolean = false;
+  moveSpeed: number = 200;
+  rotationSpeed: number = Phaser.Math.DegToRad(180);
+  keys: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key; } | null = null;
+  visualCones: Phaser.GameObjects.Graphics | null = null;
 
 
   // --- Properties for the cone flashlight ---
-  cover = null;
-  flashlightGraphics = null;
-  targetAngle = 0;
-  currentAngle = 0;
-  lastDirection = null;
+  cover: Phaser.GameObjects.Graphics | null = null;
+  flashlightGraphics: Phaser.GameObjects.Graphics | null = null;
+  targetAngle: number = 0;
+  currentAngle: number = 0;
+  lastDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 1); // default down
 
-  TILE_SIZE = 64;
-  MAZE_WIDTH_TILES = 20;
-  MAZE_HEIGHT_TILES = 15;
+  // Prototype single-player
+  roundState: string = 'playing';
+  direction: string = 'down';
+  grid: number[][] = [];
+
+  TILE_SIZE: number = 32;
+  MAZE_WIDTH_TILES: number = 20;
+  MAZE_HEIGHT_TILES: number = 15;
 
   constructor() {
     super({ key: 'FlashlightScene' });
@@ -108,9 +111,9 @@ class FlashlightScene extends Phaser.Scene {
     
     // --- Static Camera Setup ---
     this.cameras.main.setBounds(0, 0, mazeWidth, mazeHeight);
-    const zoom = Math.min(this.cameras.main.width / mazeWidth, this.cameras.main.height / mazeHeight);
-    this.cameras.main.setZoom(zoom);
-    this.cameras.main.centerOn(mazeWidth / 2, mazeHeight / 2);
+    // Fixed zoom for prototype
+     
+    this.cameras.main.setZoom(1);
   }
 
 
@@ -201,158 +204,6 @@ class FlashlightScene extends Phaser.Scene {
     const wallY = current.y + dy / 2;
     this.grid[wallY][wallX] = 1;
   }
-
-
-
-
-
-  private handleKeyDown(event: KeyboardEvent) {
-    console.log('MazeScene handleKeyDown:', event.key, 'roundState:', this.roundState, 'isMoving:', this.isMoving, 'player:', !!this.player);
-    if (this.roundState !== 'playing' || this.isMoving || !this.player) {
-      console.log('Movement blocked:', { roundState: this.roundState, isMoving: this.isMoving, hasPlayer: !!this.player });
-      return;
-    }
-
-    let newX = this.playerX;
-    let newY = this.playerY;
-    let newDirection = this.direction;
-
-    switch (event.key) {
-      case 'ArrowLeft':
-      case 'a':
-      case 'A':
-        newX -= 1;
-        newDirection = 'left';
-        break;
-      case 'ArrowRight':
-      case 'd':
-      case 'D':
-        newX += 1;
-        newDirection = 'right';
-        break;
-      case 'ArrowUp':
-      case 'w':
-      case 'W':
-        newY -= 1;
-        newDirection = 'up';
-        break;
-      case 'ArrowDown':
-      case 's':
-      case 'S':
-        newY += 1;
-        newDirection = 'down';
-        break;
-      default:
-        return;
-    }
-
-    const oldX = this.playerX;
-    const oldY = this.playerY;
-
-    console.log('Attempting move from', oldX, oldY, 'to', newX, newY, 'direction:', newDirection);
-
-    // Check bounds and collision (1 = path)
-    const inBounds = newX >= 0 && newX < this.grid[0].length && newY >= 0 && newY < this.grid.length;
-    const isPath = inBounds ? this.grid[newY][newX] === 1 : false;
-    console.log('Collision check:', { newX, newY, inBounds, gridValue: inBounds ? this.grid[newY][newX] : 'OOB', isPath });
-    if (inBounds && isPath) {
-      // Track for potential server rejection
-      this.pendingExpectedX = newX;
-      this.pendingExpectedY = newY;
-      this.pendingOldX = oldX;
-      this.pendingOldY = oldY;
-      this.isPendingSync = true;
-
-      this.isMoving = true;
-      const targetX = newX * this.tileSize + this.tileSize / 2;
-      const targetY = newY * this.tileSize + this.tileSize / 2;
-
-      console.log('Valid move, starting tween to', targetX, targetY);
-
-      // Smooth tween animation
-      (this as any).tweens.add({
-        targets: this.player,
-        x: targetX,
-        y: targetY,
-        duration: this.moveSpeed,
-        ease: 'Linear',
-        onComplete: () => {
-          console.log('Tween complete, updating position to', newX, newY, 'direction:', newDirection);
-          this.playerX = newX;
-          this.playerY = newY;
-          this.direction = newDirection;
-          const dx = newX - oldX;
-          const dy = newY - oldY;
-          this.lastDirection.set(dx, dy);
-          if (this.lastDirection.length() > 0) {
-            this.lastDirection.normalize();
-          }
-          this.targetAngle = this.lastDirection.angle();
-          this.isMoving = false;
-          if (this.room) {
-            console.log('Sending move to server:', { dx: newX - oldX, dy: newY - oldY, direction: newDirection });
-            this.room.send('move', {
-              dx: newX - oldX,
-              dy: newY - oldY,
-              direction: newDirection
-            });
-          }
-          this.updateVisibility();
-        }
-      });
-    } else {
-      console.log('Invalid move: out of bounds or wall');
-      this.shakeEffect();
-    }
-  }
-
-  }
-
-
-      // Other players' polygons for union reveal (DEFERRED TO STORY 4.2)
-      /*
-      this.otherPlayers.forEach((other) => {
-        const otherPosX = other.x * this.tileSize + this.tileSize / 2;
-        const otherPosY = other.y * this.tileSize + this.tileSize / 2;
-        const otherAngle = this.dirToAngle[other.direction as keyof typeof this.dirToAngle];
-        const otherPolygon = this.computeVisibilityPolygon(otherPosX, otherPosY, otherAngle);
-        if (otherPolygon.length > 2) {
-          this.flashlightGraphics.fillPoints(otherPolygon, true);
-        }
-      });
-      */
-
-      // Visual cones overlay
-      this.visualCones.clear();
-
-      // Own cone
-      this.visualCones.fillStyle(0xffffff, 0.3);
-      if (ownPolygon.length > 2) {
-        this.visualCones.fillPoints(ownPolygon, true);
-      }
-
-      // Other players' cones tinted (DEFERRED TO STORY 4.2)
-      /*
-      this.otherPlayers.forEach((other) => {
-        const otherPosX = other.x * this.tileSize + this.tileSize / 2;
-        const otherPosY = other.y * this.tileSize + this.tileSize / 2;
-        const otherAngle = this.dirToAngle[other.direction as keyof typeof this.dirToAngle];
-        const otherPolygon = this.computeVisibilityPolygon(otherPosX, otherPosY, otherAngle);
-        this.visualCones.fillStyle(0x888888, 0.3);
-        if (otherPolygon.length > 2) {
-          this.visualCones.fillPoints(otherPolygon, true);
-        }
-      });
-      */
-    } catch (error) {
-      console.error('MazeScene updateVisibility error:', error);
-    }
-  }
-
-    });
-    console.log('Shake effect triggered for move rejection');
-  }
-
 }
 
 const PhaserGame = ({ room, sessionId }: Props) => {
@@ -374,9 +225,32 @@ const PhaserGame = ({ room, sessionId }: Props) => {
       const config = {
         type: Phaser.AUTO,
         parent: gameRef.current,
-      role="application"
-    />
-  );
+        width: 800,
+        height: 600,
+        physics: {
+          default: 'arcade',
+          arcade: {
+            gravity: { x: 0, y: 0 },
+            debug: false
+          }
+        },
+        scene: FlashlightScene
+      };
+
+      game = new Phaser.Game(config);
+      gameInstanceRef.current = game;
+
+      return () => {
+        if (game) {
+          game.destroy(true);
+        }
+      };
+    } catch (error) {
+      console.error('PhaserGame init error:', error);
+    }
+  }, []);
+
+  return <div ref={gameRef} style={{ width: '100%', height: '100%' }} />;
 };
 
 export default PhaserGame;

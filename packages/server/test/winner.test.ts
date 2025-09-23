@@ -9,6 +9,7 @@ describe('Winner detection', () => {
   let guestClient: Client;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     room = new MazeRaceRoom();
     room.onCreate({});
 
@@ -28,11 +29,18 @@ describe('Winner detection', () => {
     state.grid[state.treasureIndex] = 1;
   });
 
+  afterEach(() => {
+    jest.runAllTimers();
+    jest.useRealTimers();
+  });
+
   it('detects winner when player moves onto treasure', () => {
     const state: any = room.state;
     const guest = state.players.get('guest-session');
     // Move guest to (1,1) from start (1,0)
     (room as any).handleMove(guestClient, { dx: 0, dy: 1 });
+
+    jest.advanceTimersByTime(3000);
 
     expect(state.roundWinnerId).toBe(guest.id);
     expect(state.roundState).toBe('round_over');
@@ -54,6 +62,8 @@ describe('Winner detection', () => {
     // Simulate concurrent moves: both move dx towards center
     (room as any).handleMove(hostClient, { dx: 1, dy: 0 });
     (room as any).handleMove(guestClient, { dx: -1, dy: 0 });
+
+    jest.advanceTimersByTime(3000);
 
     // Exactly one winner set
     expect(state.roundWinnerId).toBeTruthy();

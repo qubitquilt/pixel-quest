@@ -1,130 +1,102 @@
----
-name: repo
-type: repo
-agent: CodeActAgent
----
 
-# Pixel Quest — OpenHands microagents repository guide
+# General Microagents
 
-A concise, machine-readable summary of this repository to help OpenHands microagents (BMAD personas) navigate, reason, and act inside the repo.
+> General guidelines for OpenHands to work more effectively with the repository.
 
-## Project (canonical)
+## Usage
 
-- Name: pixel-quest
-- Description: Multiplayer maze race game built with Next.js (client), Colyseus (server) and Phaser (game rendering).
-- Canonical README: [`README.md`](README.md:1)
-- Repository root packages:
-  - [`package.json`](package.json:1) (workspace root)
-  - [`packages/client/package.json`](packages/client/package.json:1)
-  - [`packages/server/package.json`](packages/server/package.json:1)
-  - [`packages/shared/package.json`](packages/shared/package.json:1)
+These microagents are always loaded as part of the context.
 
-## Goals for microagents
-- Enable safe, repository-specific suggestions and automated edits limited to the scope described below.
-- Guide contributors through setup, testing, and PR checks.
-- Provide actionable steps for story implementation, testing, and QA gate automation.
+## Frontmatter Syntax
 
-## Microagents scope & expectations
-- Read-only analysis: scanning docs/, package manifests, and source files to produce plans.
-- Patch generation: propose diffs and PR branches for implementation tasks when approved.
-- CI-aware actions: run repository commands only when the environment supports them (e.g., local dev container or approved sandbox).
-- Do not escalate or publish secrets; require human confirmation for changes that touch credentials, deploy infra, or release processes.
+The frontmatter for this type of microagent is optional.
 
-## Intended audience
-- BMAD microagents (bmad-dev-implement, bmad-qa-review, bmad-architect, etc.)
-- Human maintainers and contributors reviewing or approving agent actions.
+Frontmatter should be enclosed in triple dashes (---) and may include the following fields:
 
-## Primary maintainers / contact
-- Maintainer: (not specified in repo) — README lists placeholder contact: `Your Name - email@example.com` [`README.md`](README.md:141)
-- Required: Please provide an email and GitHub handle for the primary maintainer and a security contact. If not provided, microagents should open an issue instead of making changes that require maintainer consent.
+| Field   | Description                          | Required | Default        |
+| ------- | ------------------------------------ | -------- | -------------- |
+| `agent` | The agent this microagent applies to | No       | 'CodeActAgent' |
 
-## Supported versions and compatibility
-- Node.js: recommended v18 or higher (see README).
-- pnpm: this repo uses pnpm (Corepack recommended).
-- TypeScript: project uses TypeScript 5.x (see root pnpm overrides).
-- Next.js: configured in `packages/client` (see `packages/client/package.json`).
+## Creating a Comprehensive Repository Agent
 
-## Setup & common commands (minimal working examples)
-Clone and install:
-```bash
-git clone https://github.com/yourusername/pixel-quest.git
-cd pixel-quest
-pnpm install
+To create an effective repository agent, you can ask OpenHands to analyze your repository with a prompt like:
+
 ```
-Run services for development:
-```bash
-# Run server
-pnpm --filter server dev
-# Run client
-pnpm --filter client dev
-# Run both from root (concurrently)
-pnpm run dev
-```
-Build and test:
-```bash
-pnpm run build
-pnpm run test
-pnpm run test:e2e
-pnpm run lint
-```
-Environment files:
-- Create `.env.local` in `packages/client` and `packages/server` as needed.
-- Common env vars referenced in `README.md`:
-  - `PORT` (server)
-  - `NEXT_PUBLIC_SERVER_URL` (client)
+Please browse the repository, look at the documentation and relevant code, and understand the purpose of this repository.
 
-## Repository layout (relevant to agents)
-- `packages/client/` — Next.js app (UI).
-- `packages/server/` — Colyseus server (rooms under `packages/server/rooms`).
-- `packages/shared/` — shared types and utilities.
-- `docs/` — architecture, PRD, stories and QA guidance.
-- `.openhands/microagents/` — repo-level microagents and BMAD persona helpers.
+Specifically, I want you to create a `.openhands/microagents/repo.md` file. This file should contain succinct information that summarizes:
+1. The purpose of this repository
+2. The general setup of this repo
+3. A brief description of the structure of this repo
 
-## CI, testing, and automation expectations
-- This repo does not include `.github/workflows/` by default. Recommended CI checks:
-  - lint (pnpm run lint)
-  - test (pnpm run test)
-  - build (pnpm run build)
-- Pre-commit checks: repo includes `.openhands/pre-commit.sh`; it should run `pnpm run lint`, `pnpm run test`, `pnpm run build` (see `.openhands/pre-commit.sh`).
-
-## Security considerations
-- Secrets must live in environment variables and not be committed.
-- Microagents must avoid committing files containing secrets; flag and open an issue when secret-like content is detected.
-- Any action involving deployment keys, infra, or release automation requires human approval and a maintainer contact.
-
-## Testing and quality policy
-- Unit tests: `pnpm run test` (Jest).
-- E2E: `pnpm run test:e2e` (Playwright).
-- Linting: `pnpm run lint`.
-- Agents may run tests in approved sandboxes; failing tests must stop automated PRs.
-
-## Versioning and release policy
-- No repository release policy found. Recommendation: adopt semantic versioning (semver) for packages and maintain a `CHANGELOG.md` using conventional commits.
-- For the monorepo, recommend tagging releases at root and publishing selected packages if needed.
-
-## Links (canonical)
-- README: [`README.md`](README.md:1)
-- PRD and stories: [`docs/prd/`](docs/prd/:1)
-- Architecture docs: [`docs/architecture/`](docs/architecture/:1)
-- Microagents: [`.openhands/microagents/repo.md`](.openhands/microagents/repo.md:1)
-
-## Minimal agent-safe configuration example
-Example: run tests and open an issue if they fail (requires gh CLI with auth):
-```bash
-pnpm install --frozen-lockfile
-pnpm run test || gh issue create --title "Automated test failure" --body "Automated test run failed. Please investigate."
+Read all the GitHub workflows under .github/ of the repository (if this folder exists) to understand the CI checks (e.g., linter, pre-commit), and include those in the repo.md file.
 ```
 
-## Notes and missing information for maintainers
-Please add or confirm:
-- Maintainer GitHub handle and contact email
-- Official repository URL (if different from README placeholder)
-- Release policy or desired semantic versioning rules
+This approach helps OpenHands capture repository context efficiently, reducing the need for repeated searches during conversations and ensuring more accurate solutions.
 
-## How microagents should use this file
-Use this file as first-pass context. When proposing changes:
-1. Create a draft plan (describe files and diffs).
-2. Request approval from a human maintainer (or open an issue).
-3. Apply changes in a feature branch and include tests.
+## Example Content
 
-End of file.
+A comprehensive repository agent file (`.openhands/microagents/repo.md`) should include:
+
+```
+# Repository Purpose
+This project is a TODO application that allows users to track TODO items.
+
+# Setup Instructions
+To set it up, you can run `npm run build`.
+
+# Repository Structure
+- `/src`: Core application code
+- `/tests`: Test suite
+- `/docs`: Documentation
+- `/.github`: CI/CD workflows
+
+# CI/CD Workflows
+- `lint.yml`: Runs ESLint on all JavaScript files
+- `test.yml`: Runs the test suite on pull requests
+
+# Development Guidelines
+Always make sure the tests are passing before committing changes. You can run the tests by running `npm run test`.
+```
+
+[See more examples of general microagents here.](https://github.com/All-Hands-AI/OpenHands/tree/main/.openhands/microagents)
+
+# Repository Purpose
+Pixel Quest is a multiplayer maze race game where players navigate a maze using flashlights to reveal paths, avoid walls, and race to the exit. Built with Next.js (client-side UI), Colyseus (real-time multiplayer server), and Phaser (game rendering). Pivoting to GitHub Spec Kit for spec-driven development with atomic stories, >80% test coverage, and phased epics (lobby, maze gen/display, movement/sync, flashlight, scoring, power-ups).
+
+# Setup Instructions
+Clone the repo: `git clone https://github.com/qubitquilt/pixel-quest.git`  
+cd pixel-quest  
+pnpm install  
+Run dev: `pnpm run dev` (starts client on :3000, server on :2567)  
+Or separately: `pnpm --filter client dev` and `pnpm --filter server dev`  
+Test: `pnpm run test` (Jest units), `pnpm run test:e2e` (Playwright)  
+Build: `pnpm run build`  
+Lint: `pnpm run lint`  
+Pre-commit: Run `.openhands/pre-commit.sh` for lint/test/build checks.
+
+# Repository Structure
+- `/packages/client`: Next.js app (UI, Phaser integration in app/components/PhaserGame.tsx)  
+- `/packages/server`: Colyseus server (rooms in rooms/, index.ts entry)  
+- `/packages/shared`: Shared types/utils (types/, index.ts)  
+- `/docs`: Architecture/PRD/stories (migrated to .specify/specs/ for Spec Kit)  
+- `/.specify`: GitHub Spec Kit (constitution.md, specs/16 MD stories, templates/prompts/scripts)  
+- `/.openhands`: OpenHands integration (pre-commit.sh, setup.sh, microagents/)  
+- `/test`: Client tests (e2e/, test/)  
+- Root: package.json (pnpm workspaces), README.md, pnpm-lock.yaml  
+
+# CI/CD Workflows
+No .github/workflows/ by default. Recommended:  
+- Lint: ESLint on TS/JS via `pnpm run lint`  
+- Test: Jest units (`pnpm run test --coverage >80%`)  
+- E2E: Playwright (`pnpm run test:e2e`)  
+- Build: Next.js/Colyseus (`pnpm run build`)  
+Pre-commit hook in .openhands/pre-commit.sh enforces lint/test/build. Use Spec Kit CLI (`specify check/analyze`) for spec validation.
+
+# Development Guidelines
+- Atomic changes: One story per branch/PR (e.g., feat/story-1.1), >80% coverage, all tests pass.  
+- Testing: Unit (Jest) for functions/scenes; E2E (Playwright) for flows (lobby join, movement, visibility). Mock Colyseus for client tests.  
+- Spec Kit: Align changes to .specify/specs/ (e.g., /plan for tasks, /check for compliance).  
+- Multiplayer: Defer Colyseus sync to later stories; prototype single-player first.  
+- Commits: Conventional (feat/fix), Co-authored-by: openhands. No secrets in code/env.  
+- Pivot: Simpler Phaser prototype (ray-traced flashlight, basic maze/movement) before full multiplayer.

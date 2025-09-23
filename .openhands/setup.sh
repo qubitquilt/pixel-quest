@@ -1,13 +1,18 @@
+
 #!/bin/bash
+set -e
 
-# Install Node.js 20 via NodeSource repository
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get update
-sudo apt-get install -y nodejs
+echo "Setting up Pixel Quest multiplayer maze game..."
 
-# Enable corepack and prepare pnpm 9.1.0
-corepack enable
-corepack prepare pnpm@9.1.0 --activate
+# Install dependencies
+pnpm install
 
-# Install dependencies with frozen lockfile
-pnpm install --frozen-lockfile
+# Optional: Run tests to verify setup
+echo "Running tests to verify setup..."
+pnpm run test
+
+echo "Setup complete!"
+echo "To run development servers:"
+echo "  pnpm --filter server dev  # Server"
+echo "  pnpm --filter client dev  # Client"
+echo "Or run both: pnpm run dev"

@@ -9,7 +9,9 @@
   "scripts": {
     "build": "pnpm exec tsc --build tsconfig.build.json",
     "clean": "rimraf dist",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
   },
   "types": "dist/index.d.ts",
   "devDependencies": {
@@ -20,6 +22,9 @@
     "@babel/plugin-transform-class-static-block": "^7.28.3",
     "@babel/plugin-transform-private-methods": "^7.27.1",
     "@babel/preset-env": "^7.28.3",
-    "@babel/preset-typescript": "^7.27.1"
+    "@babel/preset-typescript": "^7.27.1",
+    "eslint": "^9.35.0",
+    "@typescript-eslint/eslint-plugin": "^8.43.0",
+    "@typescript-eslint/parser": "^8.43.0"
   }
 }

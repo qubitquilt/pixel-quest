@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-
 import * as Phaser from 'phaser';
 import { Player } from 'shared/types';
 
 interface Props {
-  room: any; // Colyseus room for state and sending movement
+  room: any; // Colyseus room for state and sending movement (future multiplayer)
   sessionId: string;
 }
 
@@ -16,130 +15,87 @@ interface OtherPlayer {
   direction: string;
 }
 
-class MazeScene extends Phaser.Scene {
-  grid: number[][] = [];
-  player: Phaser.GameObjects.Rectangle | null = null;
-  otherPlayerSprites = new Map<string, Phaser.GameObjects.Rectangle>();
-  tilesGroup: Phaser.GameObjects.Graphics[] = [];
-  roundState: string = 'waiting';
-  playerX = 0;
-  playerY = 0;
-  tileSize = 32;
-  moveSpeed = 200; // ms per move
-  direction: string = 'down';
-  fog: Phaser.GameObjects.Graphics | null = null;
-  light: Phaser.GameObjects.Graphics | null = null;
-  visualCones: Phaser.GameObjects.Graphics | null = null;
-  isMoving = false;
-  // Pending sync tracking for server rejection
-  pendingExpectedX: number = 0;
-  pendingExpectedY: number = 0;
-  pendingOldX: number = 0;
-  pendingOldY: number = 0;
-  isPendingSync = false;
-  sessionId: string = '';
-  room: any = null;
-  otherPlayers = new Map<string, OtherPlayer>();
-  // Ray-traced flashlight properties
-  walls: Phaser.Physics.Arcade.StaticGroup | null = null;
-  cover: Phaser.GameObjects.Graphics | null = null;
-  flashlightGraphics: Phaser.GameObjects.Graphics | null = null;
-  lastDirection = new Phaser.Math.Vector2(0, 1); // initial down
-  targetAngle = Math.PI / 2;
-  currentAngle = Math.PI / 2;
-  rotationSpeed = 8;
-  dirToAngle = {
-    right: 0,
-    down: Math.PI / 2,
-    left: Math.PI,
-    up: -Math.PI / 2
-  } as const;
+class FlashlightScene extends Phaser.Scene {
+  player = null;
+  cursors = null;
+  walls = null;
+
+  // --- Properties for the cone flashlight ---
+  cover = null;
+  flashlightGraphics = null;
+  targetAngle = 0;
+  currentAngle = 0;
+  lastDirection = null;
+
+  TILE_SIZE = 64;
+  MAZE_WIDTH_TILES = 20;
+  MAZE_HEIGHT_TILES = 15;
 
   constructor() {
-    super({ key: 'MazeScene' });
-  }
-
-  init(data: any) {
-    try {
-      this.sessionId = data.sessionId || '';
-      this.room = data.room;
-      this.otherPlayers = new Map();
-    } catch (error) {
-      console.error('MazeScene init error:', error);
-    }
+    super({ key: 'FlashlightScene' });
   }
 
   preload() {
-    // Preload assets if any
+    // No external assets are needed.
   }
 
   create() {
-    // Initial setup without grid; full render deferred to updateGameState
-    try {
-      // Add player sprite at starting position (placeholder)
-      if (!this.player) {
-        this.player = this.add.rectangle(
-          this.tileSize + this.tileSize / 2,
-          this.tileSize + this.tileSize / 2,
-          28,
-          28,
-          0x0000ff
-        );
-        this.player.setOrigin(0.5);
-      }
+    const mazeWidth = this.MAZE_WIDTH_TILES * this.TILE_SIZE;
+    const mazeHeight = this.MAZE_HEIGHT_TILES * this.TILE_SIZE;
 
-      // Setup keyboard input for local movement
-      console.log('MazeScene: Setting up keyboard input');
-      if (this.input.keyboard) {
-        (this.input.keyboard as any).on('keydown', this.handleKeyDown, this);
-        console.log('Keyboard input enabled successfully');
-      } else {
-        console.error('Keyboard input not available');
-      }
+    // --- Floor Setup ---
+    const floorGraphics = this.make.graphics();
+    floorGraphics.fillStyle(0x444444);
+    floorGraphics.fillRect(0, 0, this.TILE_SIZE, this.TILE_SIZE);
+    floorGraphics.generateTexture('floor_tile', this.TILE_SIZE, this.TILE_SIZE);
+    floorGraphics.destroy();
 
-      // Floor setup
-      const floorGraphics = this.make.graphics();
-      floorGraphics.fillStyle(0x444444, 1);
-      floorGraphics.fillRect(0, 0, this.tileSize, this.tileSize);
-      floorGraphics.generateTexture('floor_tile', this.tileSize, this.tileSize);
-      floorGraphics.destroy();
-      this.add.tileSprite(0, 0, 672, 672, 'floor_tile')
-        .setOrigin(0, 0)
-        .setDepth(-1)
-        .setTint(0x888888);
+    this.add.tileSprite(0, 0, mazeWidth, mazeHeight, 'floor_tile')
+      .setOrigin(0, 0)
+      .setDepth(-1)
+      .setTint(0x888888);
 
-      // Physics walls group
-      this.walls = this.physics.add.staticGroup();
+    // --- Player Setup ---
+    this.player = this.physics.add.sprite(100, 100, 'player');
+    const playerGraphics = this.make.graphics();
+    playerGraphics.fillStyle(0x00aaff);
+    playerGraphics.fillRect(0, 0, 32, 32);
+    playerGraphics.generateTexture('player', 32, 32);
+    playerGraphics.destroy();
 
-      // Fog of war cover with mask
-      this.cover = this.add.graphics();
-      this.cover.fillStyle(0x000000, 1.0);
-      this.cover.fillRect(0, 0, 672, 672);
-      this.cover.setDepth(1);
+    this.player.setTexture('player');
+    this.player.setCollideWorldBounds(true);
+    this.physics.world.setBounds(0, 0, mazeWidth, mazeHeight);
 
-      this.flashlightGraphics = this.add.graphics();
-      const mask = this.flashlightGraphics.createGeometryMask();
-      (this.cover as any).setMask(mask);
-      mask.invertAlpha = true;
+    // --- Maze and Walls Setup ---
+    this.walls = this.physics.add.staticGroup();
+    this.createMaze(this.MAZE_WIDTH_TILES, this.MAZE_HEIGHT_TILES, this.TILE_SIZE);
+    this.physics.add.collider(this.player, this.walls);
 
-      // Visual cones overlay
-      if (!this.visualCones) {
-        this.visualCones = this.add.graphics().setDepth(3);
-      }
+    // --- Flashlight Mask Setup ---
+    // Set alpha to 1 for a completely black fog of war
+    this.cover = this.add.graphics({ fillStyle: { color: 0x000000, alpha: 1.0 } });
+    this.cover.fillRect(0, 0, mazeWidth, mazeHeight);
+    this.cover.setDepth(1);
 
-      // Player depth
-      if (this.player) {
-        this.player.setDepth(5);
-      }
+    this.flashlightGraphics = this.make.graphics({ add: false });
+    const mask = this.flashlightGraphics.createGeometryMask();
+    this.cover.setMask(mask);
+    mask.invertAlpha = true;
 
-      // Initial direction setup
-      this.lastDirection = new Phaser.Math.Vector2(0, 1);
-      this.lastDirection.normalize();
-      this.targetAngle = Math.PI / 2;
-      this.currentAngle = Math.PI / 2;
-    } catch (error) {
-      console.error('MazeScene create error:', error);
-    }
+    // --- Direction Tracking ---
+    this.lastDirection = new Phaser.Math.Vector2(1, 0);
+    this.targetAngle = this.lastDirection.angle();
+    this.currentAngle = this.targetAngle;
+
+    // --- Controls & Camera ---
+    this.cursors = this.input.keyboard.createCursorKeys();
+    
+    // --- Static Camera Setup ---
+    this.cameras.main.setBounds(0, 0, mazeWidth, mazeHeight);
+    const zoom = Math.min(this.cameras.main.width / mazeWidth, this.cameras.main.height / mazeHeight);
+    this.cameras.main.setZoom(zoom);
+    this.cameras.main.centerOn(mazeWidth / 2, mazeHeight / 2);
   }
 
   updateGameState(data: any) {

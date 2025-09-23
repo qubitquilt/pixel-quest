@@ -7,6 +7,8 @@ import { Player } from 'shared/types';
 interface Props {}
 
 interface OtherPlayer {
+  // Deferred for multiplayer
+
   x: number;
   y: number;
   direction: string;
@@ -23,8 +25,6 @@ class FlashlightScene extends Phaser.Scene {
 
 
   tileSize = 32;
-  MAZE_WIDTH_TILES = 21;
-  MAZE_HEIGHT_TILES = 21;
   playerX = 1;
   playerY = 1;
   isMoving = false;
@@ -55,14 +55,14 @@ class FlashlightScene extends Phaser.Scene {
   }
 
   create() {
-    const mazeWidth = this.MAZE_WIDTH_TILES * this.TILE_SIZE;
-    const mazeHeight = this.MAZE_HEIGHT_TILES * this.TILE_SIZE;
+    const mazeWidth = 20 * this.tileSize;
+    const mazeHeight = 15 * this.tileSize;
 
     // --- Floor Setup ---
     const floorGraphics = this.make.graphics();
     floorGraphics.fillStyle(0x444444);
-    floorGraphics.fillRect(0, 0, this.TILE_SIZE, this.TILE_SIZE);
-    floorGraphics.generateTexture('floor_tile', this.TILE_SIZE, this.TILE_SIZE);
+    floorGraphics.fillRect(0, 0, this.tileSize, this.tileSize);
+    floorGraphics.generateTexture('floor_tile', this.tileSize, this.tileSize);
     floorGraphics.destroy();
 
     this.add.tileSprite(0, 0, mazeWidth, mazeHeight, 'floor_tile')
@@ -84,7 +84,7 @@ class FlashlightScene extends Phaser.Scene {
 
     // --- Maze and Walls Setup ---
     this.walls = this.physics.add.staticGroup();
-    this.createMaze(this.MAZE_WIDTH_TILES, this.MAZE_HEIGHT_TILES, this.TILE_SIZE);
+    this.createMaze(20, 15, this.tileSize);
     this.physics.add.collider(this.player, this.walls);
 
     // --- Flashlight Mask Setup ---
@@ -205,13 +205,6 @@ class FlashlightScene extends Phaser.Scene {
 
 
 
-  private arraysEqual(a: any[], b: any[]): boolean {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
-  }
 
   private handleKeyDown(event: KeyboardEvent) {
     console.log('MazeScene handleKeyDown:', event.key, 'roundState:', this.roundState, 'isMoving:', this.isMoving, 'player:', !!this.player);
@@ -313,51 +306,8 @@ class FlashlightScene extends Phaser.Scene {
     }
   }
 
-  updatePlayerPosition(x: number, y: number) {
-    this.playerX = x;
-    this.playerY = y;
-    if (this.player) {
-      this.player.x = this.playerX * this.tileSize + this.tileSize / 2;
-      this.player.y = this.playerY * this.tileSize + this.tileSize / 2;
-    }
-    this.updateVisibility();
   }
 
-  updatePlayer(id: string, x: number, y: number, direction: string) {
-    try {
-      if (id === this.sessionId) {
-        // Update self
-        this.playerX = x;
-        this.playerY = y;
-        this.direction = direction;
-        this.updatePlayerPosition(x, y);
-      } else {
-        // Update other player state and sprite with tween for smooth movement
-        this.otherPlayers.set(id, { x, y, direction });
-
-      }
-    }
-
-    const polygonPoints: Phaser.Geom.Point[] = [new Phaser.Geom.Point(posX, posY)];
-    intersectionPoints.forEach((p) => {
-      polygonPoints.push(p);
-    });
-
-    return polygonPoints;
-  }
-
-  private updateVisibility() {
-    if (!this.flashlightGraphics || !this.visualCones || this.grid.length === 0 || !this.player || !this.walls) return;
-    try {
-      const ownPosX = this.player.x;
-      const ownPosY = this.player.y;
-      const ownPolygon = this.computeVisibilityPolygon(ownPosX, ownPosY, this.currentAngle);
-
-      this.flashlightGraphics.clear();
-      this.flashlightGraphics.fillStyle(0xffffff, 1);
-      if (ownPolygon.length > 2) {
-        this.flashlightGraphics.fillPoints(ownPolygon, true);
-      }
 
       // Other players' polygons for union reveal (DEFERRED TO STORY 4.2)
       /*
@@ -399,31 +349,10 @@ class FlashlightScene extends Phaser.Scene {
     }
   }
 
-  private shakeEffect() {
-    if (!this.player) return;
-    // Simple horizontal shake feedback for rejection
-    (this as any).tweens.add({
-      targets: this.player,
-      x: '+=10',
-      duration: 50,
-      yoyo: true,
-      repeat: 4,
-      onComplete: () => {
-        // Ensure final position after shake
-        this.player!.x = this.playerX * this.tileSize + this.tileSize / 2;
-      }
     });
     console.log('Shake effect triggered for move rejection');
   }
 
-  update(time: number, delta: number) {
-    this.currentAngle = Phaser.Math.Angle.RotateTo(
-      this.currentAngle,
-      this.targetAngle,
-      this.rotationSpeed * (delta / 1000)
-    );
-    this.updateVisibility();
-  }
 }
 
 const PhaserGame = ({ room, sessionId }: Props) => {

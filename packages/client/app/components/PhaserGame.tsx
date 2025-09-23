@@ -14,7 +14,7 @@ interface OtherPlayer {
   direction: string;
 }
 
-class FlashlightScene extends Phaser.Scene {
+export class FlashlightScene extends Phaser.Scene {
   player: Phaser.Physics.Arcade.Sprite | null = null;
   cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   walls: Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -250,7 +250,7 @@ const PhaserGame = ({ room, sessionId }: Props) => {
     }
   }, []);
 
-  return <div ref={gameRef} style={{ width: '100%', height: '100%' }} />;
+  return <div data-testid="phaser-game" ref={gameRef} style={{ width: '100%', height: '100%' }} />;
 };
 
 export default PhaserGame;
